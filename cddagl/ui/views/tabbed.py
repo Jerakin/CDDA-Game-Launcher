@@ -18,7 +18,11 @@ from PyQt5.QtWidgets import (
     QGridLayout, QMainWindow, QLabel, QLineEdit, QPushButton, QProgressBar,
     QAction, QDialog, QTabWidget, QCheckBox, QMessageBox, QMenu
 )
-from pywintypes import error as PyWinError
+if os.name == 'nt':
+    from pywintypes import error as PyWinError
+elif os.name == 'posix':
+    class PyWinError:
+        pass
 
 import cddagl.constants as cons
 from cddagl import __version__ as version
@@ -33,7 +37,7 @@ from cddagl.ui.views.mods import ModsTab
 from cddagl.ui.views.settings import SettingsTab
 from cddagl.ui.views.soundpacks import SoundpacksTab
 from cddagl.ui.views.tilesets import TilesetsTab
-from cddagl.win32 import SimpleNamedPipe
+from cddagl.os import SimpleNamedPipe
 
 logger = logging.getLogger('cddagl')
 

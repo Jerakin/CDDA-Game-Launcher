@@ -9,8 +9,6 @@ arrow
 rarfile
 pylzma
 Babel
-pypiwin32
 rfc6266
-pywinutils
 Markdown
 transifex-client

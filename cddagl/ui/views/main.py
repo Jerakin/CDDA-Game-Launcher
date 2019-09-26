@@ -28,7 +28,12 @@ from PyQt5.QtWidgets import (
     QComboBox, QTextBrowser, QMessageBox, QStyle, QHBoxLayout, QSizePolicy
 )
 from babel.dates import format_datetime
-from pywintypes import error as PyWinError
+
+if os.name == 'nt':
+    from pywintypes import error as PyWinError
+elif os.name == 'posix':
+    class PyWinError:
+        pass
 
 import cddagl.constants as cons
 from cddagl.constants import get_cddagl_path, get_cdda_uld_path
@@ -42,7 +47,7 @@ from cddagl.sql.functions import (
     get_config_value, set_config_value, new_version, get_build_from_sha256,
     new_build, config_true
 )
-from cddagl.win32 import (
+from cddagl.os import (
     find_process_with_file_handle, activate_window, process_id_from_path, wait_for_pid
 )
 
@@ -1228,13 +1233,24 @@ class UpdateGroupBox(QGroupBox):
 
         platform_button_group.buttonClicked.connect(self.platform_clicked)
 
-        if not is_64_windows():
+        if not is_64_windows() or os.name != "nt":
             x64_radio_button.setEnabled(False)
 
         x86_radio_button = QRadioButton()
         layout.addWidget(x86_radio_button, layout_row, 2)
         self.x86_radio_button = x86_radio_button
         platform_button_group.addButton(x86_radio_button)
+        print(os.name)
+        if os.name != "nt":
+            x86_radio_button.setEnabled(False)
+
+        posix_radio_button = QRadioButton()
+        layout.addWidget(posix_radio_button, 0, 3)
+        self.posix_radio_button = posix_radio_button
+        platform_button_group.addButton(posix_radio_button)
+
+        if os.name == "nt":
+            posix_radio_button.setEnabled(False)
 
         layout_row = layout_row + 1
 
@@ -1299,6 +1315,7 @@ class UpdateGroupBox(QGroupBox):
         self.platform_label.setText(_('Platform:'))
         self.x64_radio_button.setText('{so} ({bit})'.format(so=_('Windows x64'), bit=_('64-bit')))
         self.x86_radio_button.setText('{so} ({bit})'.format(so=_('Windows x86'), bit=_('32-bit')))
+        self.posix_radio_button.setText('OSX')
         self.available_builds_label.setText(_('Available builds:'))
         self.refresh_builds_button.setText(_('Refresh'))
         self.changelog_groupbox.setTitle(_('Changelog'))
@@ -1319,7 +1336,6 @@ class UpdateGroupBox(QGroupBox):
                 self.experimental_radio_button.setChecked(True)
 
             platform = get_config_value('platform')
-
             if platform == 'Windows x64':
                 platform = 'x64'
             elif platform == 'Windows x86':
@@ -1331,10 +1347,13 @@ class UpdateGroupBox(QGroupBox):
                 else:
                     platform = 'x86'
 
-            if platform == 'x64':
-                self.x64_radio_button.setChecked(True)
-            elif platform == 'x86':
-                self.x86_radio_button.setChecked(True)
+            if os.name == 'nt':
+                if platform == 'x64':
+                    self.x64_radio_button.setChecked(True)
+                elif platform == 'x86':
+                    self.x86_radio_button.setChecked(True)
+            else:
+                self.posix_radio_button.setChecked(True)
 
             self.refresh_builds()
 
@@ -1678,12 +1697,15 @@ class UpdateGroupBox(QGroupBox):
             self.update_button.setEnabled(False)
 
     def enable_controls(self, builds_combo=False):
-        self.stable_radio_button.setEnabled(True)
-        self.experimental_radio_button.setEnabled(True)
+        if os.name == 'nt':
+            self.stable_radio_button.setEnabled(True)
+            self.experimental_radio_button.setEnabled(True)
 
-        if is_64_windows():
-            self.x64_radio_button.setEnabled(True)
-        self.x86_radio_button.setEnabled(True)
+            if is_64_windows():
+                self.x64_radio_button.setEnabled(True)
+            self.x86_radio_button.setEnabled(True)
+        elif os.name == 'posix':
+            self.posix_radio_button.setEnabled(True)
 
         self.refresh_builds_button.setEnabled(True)
 

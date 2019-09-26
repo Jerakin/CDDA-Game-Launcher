@@ -2,10 +2,13 @@ import logging
 import os
 import re
 import traceback
+import shutil
 from io import StringIO
-
-import winutils
-from pywintypes import com_error
+if os.name == 'nt':
+    import winutils
+    from pywintypes import com_error
+elif os.name == 'posix':
+    import cddagl.ui.views.progress as progresswindow
 
 import cddagl
 from cddagl.i18n import proxy_gettext as _
@@ -65,10 +68,13 @@ def is_64_windows():
     return 'PROGRAMFILES(X86)' in os.environ
 
 def bitness():
-    if is_64_windows():
+    if os.name == 'nt':
+        if is_64_windows():
+            return _('64-bit')
+        else:
+            return _('32-bit')
+    elif os.name == 'posix':
         return _('64-bit')
-    else:
-        return _('32-bit')
 
 def sizeof_fmt(num, suffix=None):
     if suffix is None:
@@ -85,15 +91,20 @@ def delete_path(path):
     depending on the settings used) using the built in Windows File
     operations dialog
     '''
+    permanently_delete_files = config_true(
+        get_config_value('permanently_delete_files', 'False'))
 
     # Make sure we have an absolute path first
     if not os.path.isabs(path):
         path = os.path.abspath(path)
 
-    shellcon = winutils.shellcon
+    if os.name == 'nt':
+        _delete_path_windows(path, permanently_delete_files)
+    elif os.name == 'posix':
+        _delete_path_posix(path, permanently_delete_files)
 
-    permanently_delete_files = config_true(
-        get_config_value('permanently_delete_files', 'False'))
+def _delete_path_windows(path, permanently_delete_files):
+    shellcon = winutils.shellcon
 
     if permanently_delete_files:
         flags = 0
@@ -111,6 +122,46 @@ def delete_path(path):
     except com_error:
         return False
 
+def _delete_path_posix(path, permanently_delete_files):
+    # TODO: Add Progressbar
+
+    if not permanently_delete_files:
+        print("Warning: Only supports permanently deleting files")
+        return False
+    try:
+        os.remove(path)
+        return True
+    except IsADirectoryError:
+        try:
+            shutil.rmtree(path)
+        except:
+            return False
+
+def _move_path_windows(srcpath, dstpath):
+    shellcon = winutils.shellcon
+
+    flags = (
+            shellcon.FOF_ALLOWUNDO |
+        shellcon.FOF_SILENT |
+            shellcon.FOF_NOCONFIRMMKDIR |
+            shellcon.FOF_NOCONFIRMATION |
+            shellcon.FOF_WANTNUKEWARNING
+    )
+
+    try:
+        return winutils.move(srcpath, dstpath, flags)
+    except com_error:
+        return False
+
+def _move_path_posix(srcpath, dstpath):
+    # TODO: Add Progressbar
+    try:
+        shutil.move(srcpath, dstpath)
+        return True
+    except:
+        return False
+
+
 def move_path(srcpath, dstpath):
     ''' Move srcpath to dstpath using using the built in Windows File
     operations dialog
@@ -122,17 +173,7 @@ def move_path(srcpath, dstpath):
     if not os.path.isabs(dstpath):
         dstpath = os.path.abspath(dstpath)
 
-    shellcon = winutils.shellcon
-
-    flags = (
-        shellcon.FOF_ALLOWUNDO |
-        shellcon.FOF_SILENT |
-        shellcon.FOF_NOCONFIRMMKDIR |
-        shellcon.FOF_NOCONFIRMATION |
-        shellcon.FOF_WANTNUKEWARNING
-        )
-
-    try:
-        return winutils.move(srcpath, dstpath, flags)
-    except com_error:
-        return False
+    if os.name == 'nt':
+        return _move_path_windows(srcpath, dstpath)
+    elif os.name == 'posix':
+        return _move_path_posix(srcpath, dstpath)
