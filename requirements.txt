@@ -12,6 +12,7 @@ Babel
 rfc6266
 Markdown
 transifex-client
+appdirs
 
 pypiwin32; sys_platform == 'win'
 pywinutils; sys_platform == 'win'
