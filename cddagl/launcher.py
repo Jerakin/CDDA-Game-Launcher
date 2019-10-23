@@ -20,7 +20,7 @@ from cddagl.i18n import (
     load_gettext_locale, load_gettext_no_locale,
     proxy_gettext as _, get_available_locales
 )
-from cddagl.sql.functions import init_config, get_config_value, config_true
+from cddagl.sql.functions import init_config, get_config_value, config_true, get_user_data_dir
 from cddagl.ui.views.dialogs import ExceptionWindow
 from cddagl.ui.views.tabbed import TabbedWindow
 
@@ -68,15 +68,7 @@ def init_logging():
     logger = logging.getLogger('cddagl')
     logger.setLevel(logging.INFO)
 
-    local_app_data = os.environ.get('LOCALAPPDATA', os.environ.get('APPDATA'))
-    if local_app_data is None or not os.path.isdir(local_app_data):
-        local_app_data = ''
-
-    logging_dir = os.path.join(local_app_data, 'CDDA Game Launcher')
-    if not os.path.isdir(logging_dir):
-        os.makedirs(logging_dir)
-
-    logging_file = os.path.join(logging_dir, 'app.log')
+    logging_file = os.path.join(get_user_data_dir(), 'app.log')
 
     handler = RotatingFileHandler(logging_file, encoding='utf8',
                                   maxBytes=cons.MAX_LOG_SIZE, backupCount=cons.MAX_LOG_FILES)

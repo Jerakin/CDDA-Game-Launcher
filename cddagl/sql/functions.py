@@ -1,6 +1,8 @@
 import os
 import threading
 
+from appdirs import AppDirs
+
 from alembic import command
 from alembic.config import Config
 
@@ -47,17 +49,15 @@ def init_config(basedir):
         command.upgrade(alembic_cfg, "head")
 
 
-def get_config_path():
-    local_app_data = os.environ.get('LOCALAPPDATA', os.environ.get('APPDATA'))
-    if local_app_data is None or not os.path.isdir(local_app_data):
-        local_app_data = ''
-
-    config_dir = os.path.join(local_app_data, 'CDDA Game Launcher')
-
+def get_user_data_dir():
+    config_dir = AppDirs("CDDA Game Launcher").user_data_dir
     if not os.path.isdir(config_dir):
-        os.makedirs(config_dir)
+        os.mkdir(config_dir)
+    return config_dir
 
-    return os.path.join(config_dir, 'configs.db')
+
+def get_config_path():
+    return os.path.join(get_user_data_dir(), 'configs.db')
 
 
 def get_session():
@@ -80,7 +80,6 @@ def get_config_value(name, default=None):
     session = get_session()
 
     db_value = session.query(ConfigValue).filter_by(name=name).first()
-
     if db_value is None:
         return default
 
