@@ -45,7 +45,7 @@ from cddagl.functions import (
 from cddagl.i18n import proxy_ngettext as ngettext, proxy_gettext as _
 from cddagl.sql.functions import (
     get_config_value, set_config_value, new_version, get_build_from_sha256,
-    new_build, config_true
+    new_build, config_true, mountdmg, unmountdmg
 )
 from cddagl.os import (
     find_process_with_file_handle, activate_window, process_id_from_path, wait_for_pid
@@ -1863,7 +1863,7 @@ class UpdateGroupBox(QGroupBox):
                 def __del__(self):
                     self.wait()
 
-                def run(self):
+                def _run_win(self):
                     try:
                         with zipfile.ZipFile(self.downloaded_file) as z:
                             if z.testzip() is not None:
@@ -1875,9 +1875,22 @@ class UpdateGroupBox(QGroupBox):
 
                     self.completed.emit()
 
+                def _run_posix(self):
+                    if not os.path.exists(self.downloaded_file):
+                        self.not_downloaded.emit()
+                        return
+                    self.completed.emit()
+
+                def run(self):
+                    if os.name == 'nt':
+                        self._run_win()
+                    else:
+                        self._run_posix()
+
             def completed_test():
                 self.test_thread = None
 
+                status_bar.clearMessage()
                 status_bar.clearMessage()
                 self.clear_previous_dir()
 
@@ -1885,6 +1898,7 @@ class UpdateGroupBox(QGroupBox):
                 self.test_thread = None
 
                 status_bar.clearMessage()
+                logger.info('Downloaded archive is invalid')
                 status_bar.showMessage(_('Downloaded archive is invalid'))
 
                 download_dir = os.path.dirname(self.downloaded_file)
@@ -1895,6 +1909,7 @@ class UpdateGroupBox(QGroupBox):
                 self.test_thread = None
 
                 status_bar.clearMessage()
+                logger.info('Could not download game')
                 status_bar.showMessage(_('Could not download game'))
 
                 download_dir = os.path.dirname(self.downloaded_file)
@@ -2006,7 +2021,7 @@ class UpdateGroupBox(QGroupBox):
                     status_bar.clearMessage()
 
                     self.backing_up_game = False
-                    self.extract_new_build()
+                    self.extract_new_build_win()
 
                 else:
                     backup_element = self.backup_dir_list[self.backup_index]
@@ -2046,9 +2061,22 @@ class UpdateGroupBox(QGroupBox):
             timer.start(0)
         else:
             self.backing_up_game = False
-            self.extract_new_build()
+            if os.name == "nt":
+                self.extract_new_build_win()
+            else:
+                self.extract_new_build_posix()
 
-    def extract_new_build(self):
+    def extract_new_build_posix(self):
+        self.extracting_new_build = True
+        mount_point, _ = mountdmg(self.downloaded_file)
+        if mount_point:
+            mount_point = mount_point[0]
+        else:
+            logger.info("Could not mount DMG")
+        shutil.copytree(os.path.join(mount_point, self.base_asset['Name'] + ".app"), os.path.join(self.game_dir, "Cataclysm.app"), True)
+        unmountdmg(mount_point)
+
+    def extract_new_build_win(self):
         self.extracting_new_build = True
 
         z = zipfile.ZipFile(self.downloaded_file)

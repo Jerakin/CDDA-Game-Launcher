@@ -1,5 +1,9 @@
 import os
 import threading
+import logging
+from subprocess import Popen, PIPE, call
+import plistlib
+import tempfile
 
 from appdirs import AppDirs
 
@@ -11,6 +15,9 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker, joinedload
 
 from cddagl.sql.model import ConfigValue, GameVersion, GameBuild
+import cddagl.constants as cons
+
+logger = logging.getLogger('cddagl')
 
 
 class ThreadSafeSessionManager():
@@ -163,3 +170,54 @@ def get_build_from_sha256(sha256):
 
 def config_true(value):
     return value == 'True' or value == '1'
+
+
+def mountdmg(dmgpath, use_shadow=False):
+    """
+    Attempts to mount the dmg at dmgpath
+    and returns a list of mountpoints
+    If use_shadow is true, mount image with shadow file
+    """
+    mountpoints = []
+    dmgname = os.path.basename(dmgpath)
+    cmd = ['/usr/bin/hdiutil', 'attach', dmgpath,
+                '-mountRandom',  tempfile.mkdtemp(prefix=cons.TEMP_PREFIX), '-plist',
+                '-owners', 'on']
+    if use_shadow:
+        shadowname = dmgname + '.shadow'
+        shadowroot = os.path.dirname(dmgpath)
+        shadowpath = os.path.join(shadowroot, shadowname)
+        cmd.extend(['-shadow', shadowpath])
+    else:
+        shadowpath = None
+    proc = Popen(cmd, bufsize=-1,
+        stdout=PIPE, stderr=PIPE)
+    (pliststr, err) = proc.communicate()
+    if proc.returncode:
+        logger.info("Error: {} while mounting {}".format(err, dmgname))
+
+    if pliststr:
+        plist = plistlib.loads(pliststr)
+        for entity in plist['system-entities']:
+            if 'mount-point' in entity:
+                mountpoints.append(entity['mount-point'])
+
+    return mountpoints, shadowpath
+
+
+def unmountdmg(mountpoint):
+    """
+    Unmounts the dmg at mountpoint
+    """
+    proc = Popen(['/usr/bin/hdiutil', 'detach', mountpoint],
+                                bufsize=-1, stdout=PIPE,
+                                stderr=PIPE)
+    (unused_output, err) = proc.communicate()
+    if proc.returncode:
+        logger.info("Polite unmount failed: {}".format(err))
+        logger.info('Attempting to force unmount {}'.format(mountpoint))
+        # try forcing the unmount
+        retcode = call(['/usr/bin/hdiutil', 'detach', mountpoint,
+                                '-force'])
+        if retcode:
+            logger.info('Failed to unmount {}'.format(mountpoint))
