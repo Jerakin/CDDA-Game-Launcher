@@ -40,7 +40,12 @@ BASE_ASSETS = {
         'x86': {
             'Platform': 'Windows',
             'Graphics': 'Tiles'
+        },
+        'OSX': {
+            'Platform': 'macOS',
+            'Graphics': 'Tiles'
         }
+
     },
     'Console': {
         'x64': {
@@ -51,6 +56,10 @@ BASE_ASSETS = {
             'Platform': 'Windows',
             'Graphics': 'Curses'
         },
+        'OSX': {
+            'Platform': 'macOS',
+            'Graphics': 'Tiles'
+        }
     }
 }
 

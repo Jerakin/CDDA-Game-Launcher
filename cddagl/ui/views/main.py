@@ -1334,26 +1334,32 @@ class UpdateGroupBox(QGroupBox):
                 self.stable_radio_button.setChecked(True)
             elif branch == cons.CONFIG_BRANCH_EXPERIMENTAL:
                 self.experimental_radio_button.setChecked(True)
-
             platform = get_config_value('platform')
-            if platform == 'Windows x64':
-                platform = 'x64'
-            elif platform == 'Windows x86':
-                platform = 'x86'
 
-            if platform is None or platform not in ('x64', 'x86'):
-                if is_64_windows():
+            if os.name == "posix":
+                # If the platform is macOS
+                self.posix_radio_button.setChecked(True)
+                self.x64_radio_button.setChecked(False)
+                self.x86_radio_button.setChecked(False)
+            else:
+                if platform == 'Windows x64':
                     platform = 'x64'
-                else:
+                elif platform == 'Windows x86':
                     platform = 'x86'
 
-            if os.name == 'nt':
-                if platform == 'x64':
-                    self.x64_radio_button.setChecked(True)
-                elif platform == 'x86':
-                    self.x86_radio_button.setChecked(True)
-            else:
-                self.posix_radio_button.setChecked(True)
+                if platform is None or platform not in ('x64', 'x86'):
+                    if is_64_windows():
+                        platform = 'x64'
+                    else:
+                        platform = 'x86'
+
+                if os.name == 'nt':
+                    if platform == 'x64':
+                        self.x64_radio_button.setChecked(True)
+                    elif platform == 'x86':
+                        self.x86_radio_button.setChecked(True)
+                else:
+                    self.posix_radio_button.setChecked(True)
 
             self.refresh_builds()
 
@@ -2856,6 +2862,8 @@ class UpdateGroupBox(QGroupBox):
             selected_platform = 'x64'
         elif selected_platform is self.x86_radio_button:
             selected_platform = 'x86'
+        elif selected_platform is self.posix_radio_button:
+            selected_platform = "OSX"
 
         if selected_branch is self.stable_radio_button:
             # Populate stable builds and stable changelog
