@@ -1,5 +1,0 @@
--r requirements.txt
-
-posix_ipc
-psutil
-Send2Trash

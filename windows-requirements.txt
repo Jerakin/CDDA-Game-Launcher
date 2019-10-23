@@ -1,4 +1,0 @@
--r requirements.txt
-
-pypiwin32
-pywinutils
