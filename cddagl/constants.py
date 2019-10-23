@@ -35,22 +35,43 @@ BASE_ASSETS = {
     'Tiles': {
         'x64': {
             'Platform': 'Windows_x64',
-            'Graphics': 'Tiles'
+            'Graphics': 'Tiles',
+            'Extension': 'zip',
+            'Name': 'cataclysmdda'
         },
         'x86': {
             'Platform': 'Windows',
-            'Graphics': 'Tiles'
+            'Graphics': 'Tiles',
+            'Extension': 'zip',
+            'Name': 'cataclysmdda'
+        },
+        'OSX': {
+            'Platform': 'OSX',
+            'Graphics': 'Tiles',
+            'Extension': 'dmg',
+            'Name': 'Cataclysm'
         }
+
     },
     'Console': {
         'x64': {
             'Platform': 'Windows_x64',
-            'Graphics': 'Curses'
+            'Graphics': 'Curses',
+            'Extension': 'zip',
+            'Name': 'cataclysmdda'
         },
         'x86': {
             'Platform': 'Windows',
-            'Graphics': 'Curses'
+            'Graphics': 'Curses',
+            'Extension': 'zip',
+            'Name': 'cataclysmdda'
         },
+        'OSX': {
+            'Platform': 'OSX',
+            'Graphics': 'Curses',
+            'Extension': 'dmg',
+            'Name': 'Cataclysm'
+        }
     }
 }
 
@@ -62,7 +83,8 @@ STABLE_ASSETS = {
         'github_release': 'https://github.com/CleverRaven/Cataclysm-DDA/releases/tag/0.D',
         'Tiles': {
             'x64': 'https://github.com/CleverRaven/Cataclysm-DDA/releases/download/0.D/cataclysmdda-0.D-8574-Win64-Tiles.zip',
-            'x86': 'https://github.com/CleverRaven/Cataclysm-DDA/releases/download/0.D/cataclysmdda-0.D-8574-Win-Tiles.zip'
+            'x86': 'https://github.com/CleverRaven/Cataclysm-DDA/releases/download/0.D/cataclysmdda-0.D-8574-Win-Tiles.zip',
+            'OSX': 'https://github.com/CleverRaven/Cataclysm-DDA/releases/download/0.D/Cataclysm-0.D-8574-OSX-Tiles.dmg'
         }
     },
     '0.C': {
@@ -73,6 +95,7 @@ STABLE_ASSETS = {
         'Tiles': {
             'x64': 'https://dev.narc.ro/cataclysm/jenkins-promoted/Windows_x64/Tiles/cataclysmdda-0.C-2834.zip',
             'x86': 'https://dev.narc.ro/cataclysm/jenkins-promoted/Windows_x64/Tiles/cataclysmdda-0.C-2834.zip'
+
         }
     }
 }
@@ -133,7 +156,6 @@ def get_cddagl_path(*subpaths):
     else:
         # we are running in a normal Python environment
         basedir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
     return os.path.join(basedir, *subpaths)
 
 

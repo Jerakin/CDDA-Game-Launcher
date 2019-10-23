@@ -2718,13 +2718,15 @@ class UpdateGroupBox(QGroupBox):
 
         builds = []
 
+        asset_name = self.base_asset['Name']
         asset_platform = self.base_asset['Platform']
         asset_graphics = self.base_asset['Graphics']
+        asset_extension = self.base_asset['Extension']
 
-        target_regex = re.compile(r'cataclysmdda-(?P<major>.+)-' +
+        target_regex = re.compile(asset_name + r'-(?P<major>.+)-' +
             re.escape(asset_platform) + r'-' +
             re.escape(asset_graphics) + r'-' +
-            r'(?P<build>\d+)\.zip'
+            r'(?P<build>\d+)\.' + re.escape(asset_extension)
             )
 
         build_regex = re.compile(r'build #(?P<build>\d+)')
