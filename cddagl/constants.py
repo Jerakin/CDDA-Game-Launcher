@@ -94,7 +94,8 @@ STABLE_ASSETS = {
         'github_release': 'https://github.com/CleverRaven/Cataclysm-DDA/releases/tag/0.C',
         'Tiles': {
             'x64': 'https://dev.narc.ro/cataclysm/jenkins-promoted/Windows_x64/Tiles/cataclysmdda-0.C-2834.zip',
-            'x86': 'https://dev.narc.ro/cataclysm/jenkins-promoted/Windows_x64/Tiles/cataclysmdda-0.C-2834.zip'
+            'x86': 'https://dev.narc.ro/cataclysm/jenkins-promoted/Windows_x64/Tiles/cataclysmdda-0.C-2834.zip',
+            'OSX': ''
 
         }
     }

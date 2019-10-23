@@ -58,7 +58,7 @@ def arstrip(value):
     return value
 
 def is_64_windows():
-    return 'PROGRAMFILES(X86)' in os.environ
+    return os.name == "nt" and 'PROGRAMFILES(X86)' in os.environ
 
 def bitness():
     if is_64_windows():

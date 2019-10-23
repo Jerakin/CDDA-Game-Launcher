@@ -1228,13 +1228,23 @@ class UpdateGroupBox(QGroupBox):
 
         platform_button_group.buttonClicked.connect(self.platform_clicked)
 
-        if not is_64_windows():
-            x64_radio_button.setEnabled(False)
-
         x86_radio_button = QRadioButton()
         layout.addWidget(x86_radio_button, layout_row, 2)
         self.x86_radio_button = x86_radio_button
         platform_button_group.addButton(x86_radio_button)
+
+        osx_radio_button = QRadioButton()
+        layout.addWidget(osx_radio_button, layout_row, 3)
+        self.osx_radio_button = osx_radio_button
+        platform_button_group.addButton(osx_radio_button)
+
+        if os.name == "nt":
+            osx_radio_button.setEnabled(False)
+            if is_64_windows():
+                x64_radio_button.setEnabled(False)
+        elif os.name == "posix":
+            x64_radio_button.setEnabled(False)
+            x86_radio_button.setEnabled(False)
 
         layout_row = layout_row + 1
 
@@ -1299,6 +1309,7 @@ class UpdateGroupBox(QGroupBox):
         self.platform_label.setText(_('Platform:'))
         self.x64_radio_button.setText('{so} ({bit})'.format(so=_('Windows x64'), bit=_('64-bit')))
         self.x86_radio_button.setText('{so} ({bit})'.format(so=_('Windows x86'), bit=_('32-bit')))
+        self.osx_radio_button.setText('macOS')
         self.available_builds_label.setText(_('Available builds:'))
         self.refresh_builds_button.setText(_('Refresh'))
         self.changelog_groupbox.setTitle(_('Changelog'))
@@ -1320,21 +1331,13 @@ class UpdateGroupBox(QGroupBox):
 
             platform = get_config_value('platform')
 
-            if platform == 'Windows x64':
-                platform = 'x64'
-            elif platform == 'Windows x86':
-                platform = 'x86'
-
-            if platform is None or platform not in ('x64', 'x86'):
+            if os.name == "nt" and (platform is None or platform not in ('Windows x64', 'Windows x86')):
                 if is_64_windows():
-                    platform = 'x64'
+                    self.x64_radio_button.setChecked(True)
                 else:
-                    platform = 'x86'
-
-            if platform == 'x64':
-                self.x64_radio_button.setChecked(True)
-            elif platform == 'x86':
-                self.x86_radio_button.setChecked(True)
+                    self.x86_radio_button.setChecked(True)
+            elif os.name == "posix":
+                self.osx_radio_button.setChecked(True)
 
             self.refresh_builds()
 
@@ -1668,6 +1671,7 @@ class UpdateGroupBox(QGroupBox):
 
         self.x64_radio_button.setEnabled(False)
         self.x86_radio_button.setEnabled(False)
+        self.osx_radio_button.setEnabled(False)
 
         self.previous_bc_enabled = self.builds_combo.isEnabled()
         self.builds_combo.setEnabled(False)
@@ -1680,11 +1684,12 @@ class UpdateGroupBox(QGroupBox):
     def enable_controls(self, builds_combo=False):
         self.stable_radio_button.setEnabled(True)
         self.experimental_radio_button.setEnabled(True)
-
-        if is_64_windows():
-            self.x64_radio_button.setEnabled(True)
-        self.x86_radio_button.setEnabled(True)
-
+        if os.name == "nt":
+            if is_64_windows():
+                self.x64_radio_button.setEnabled(True)
+            self.x86_radio_button.setEnabled(True)
+        elif os.name == "posix":
+            self.osx_radio_button.setEnabled(True)
         self.refresh_builds_button.setEnabled(True)
 
         if builds_combo:
@@ -2836,6 +2841,8 @@ class UpdateGroupBox(QGroupBox):
             selected_platform = 'x64'
         elif selected_platform is self.x86_radio_button:
             selected_platform = 'x86'
+        elif selected_platform is self.osx_radio_button:
+            selected_platform = 'OSX'
 
         if selected_branch is self.stable_radio_button:
             # Populate stable builds and stable changelog
@@ -2889,7 +2896,6 @@ class UpdateGroupBox(QGroupBox):
 
             self.changelog_content.setHtml(cons.STABLE_CHANGELOG)
 
-            
         elif selected_branch is self.experimental_radio_button:
             release_asset = cons.BASE_ASSETS['Tiles'][selected_platform]
 
@@ -2995,7 +3001,8 @@ class UpdateGroupBox(QGroupBox):
             config_value = 'x64'
         elif button is self.x86_radio_button:
             config_value = 'x86'
-
+        elif button is self.xosx_radio_button:
+            config_value = 'OSX'
         set_config_value('platform', config_value)
 
         self.refresh_builds()
