@@ -40,7 +40,7 @@ def unique(seq):
             yield x
 
 def clean_qt_path(path):
-    return path.replace('/', '\\')
+    return os.path.realpath(path)
 
 def safe_filename(filename):
     keepcharacters = (' ', '.', '_', '-')
