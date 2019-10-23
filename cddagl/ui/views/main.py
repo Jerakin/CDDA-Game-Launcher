@@ -253,8 +253,7 @@ class GameDirGroupBox(QGroupBox):
             else:
                 game_directory = get_config_value('game_directory')
                 if game_directory is None:
-                    cddagl_path = os.path.dirname(os.path.realpath(
-                        sys.executable))
+                    cddagl_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
                     default_dir = os.path.join(cddagl_path, 'cdda')
                     game_directory = default_dir
 
