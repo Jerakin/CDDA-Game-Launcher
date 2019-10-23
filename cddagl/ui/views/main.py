@@ -1379,15 +1379,14 @@ class UpdateGroupBox(QGroupBox):
             game_dir = game_dir_group_box.dir_combo.currentText()
 
             # Check if we are installing in an empty directory
-            if (game_dir_group_box.exe_path is None and
-                os.path.exists(game_dir) and
-                os.path.isdir(game_dir)):
-
+            if game_dir_group_box.exe_path is None and os.path.exists(game_dir) and os.path.isdir(game_dir):
+                logger.info("Downloading New...")
                 current_scan = scandir(game_dir)
                 game_dir_empty = True
 
                 try:
                     next(current_scan)
+                    logger.info("  Into empty folder...")
                     game_dir_empty = False
                 except StopIteration:
                     pass
@@ -1440,7 +1439,10 @@ class UpdateGroupBox(QGroupBox):
 
             selected_branch = self.branch_button_group.checkedButton()
             experimental_selected = selected_branch is self.experimental_radio_button
-
+            logger.info("Selected build: {}\n"
+                        "Selected branch: {}\n"
+                        "Experimental: {}"
+                        .format(self.selected_build["number"], selected_branch.text(), experimental_selected))
             latest_build = self.builds[0]
             if experimental_selected and game_dir_group_box.current_build == latest_build['number']:
                 confirm_msgbox = QMessageBox()
@@ -1484,15 +1486,26 @@ class UpdateGroupBox(QGroupBox):
                     self.finish_updating()
                     return
 
+                download_url = self.selected_build['url']
+                if not download_url:
+                    # TODO: Preferably the "Install game" button should not be enabled if there is no build
+                    self.finish_updating()
+                    main_window = self.get_main_window()
+                    status_bar = main_window.statusBar()
+                    status_bar.showMessage(_('Build download is unavailable from selected build'))
+                    return
+
                 download_dir = tempfile.mkdtemp(prefix=cons.TEMP_PREFIX)
 
-                download_url = self.selected_build['url']
+                logger.info("Download from url: {}".format(download_url))
+                logger.info("Creating Temporary folder: {}".format(download_dir))
 
                 url = QUrl(download_url)
                 file_info = QFileInfo(url.path())
                 file_name = file_info.fileName()
 
                 self.downloaded_file = os.path.join(download_dir, file_name)
+                logger.info("Downloaded temorary file:  {}".format(self.downloaded_file))
                 self.downloading_file = open(self.downloaded_file, 'wb')
 
                 self.download_game_update(download_url)
@@ -1722,6 +1735,7 @@ class UpdateGroupBox(QGroupBox):
         self.update_button.setEnabled(self.previous_ub_enabled)
 
     def download_game_update(self, url):
+        logger.info("Starting Download...")
         main_window = self.get_main_window()
 
         status_bar = main_window.statusBar()
