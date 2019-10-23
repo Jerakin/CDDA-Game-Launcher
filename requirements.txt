@@ -14,5 +14,7 @@ Markdown
 transifex-client
 appdirs
 
-pypiwin32; sys_platform == 'win'
-pywinutils; sys_platform == 'win'
+send2trash; os_name == "posix"
+
+pypiwin32; os_name == 'nt'
+pywinutils; os_name == 'nt'

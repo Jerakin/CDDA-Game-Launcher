@@ -44,7 +44,7 @@ from cddagl.sql.functions import (
     new_build, config_true
 )
 from cddagl.system import (
-    find_process_with_file_handle, activate_window, process_id_from_path, wait_for_pid
+    find_process_with_file_handle, activate_window, process_id_from_path, wait_for_pid, get_save_directory
 )
 
 logger = logging.getLogger('cddagl')
@@ -302,281 +302,6 @@ class GameDirGroupBox(QGroupBox):
         raise NotImplementedError
 
     def launch_game(self):
-        raise NotImplementedError
-
-    def launch_game_process(self):
-        raise NotImplementedError
-
-    def game_ended(self):
-        raise NotImplementedError
-
-    def get_main_tab(self):
-        return self.parentWidget()
-
-    def get_main_window(self):
-        return self.get_main_tab().get_main_window()
-
-    def update_soundpacks(self):
-        main_window = self.get_main_window()
-        central_widget = main_window.central_widget
-        soundpacks_tab = central_widget.soundpacks_tab
-
-        directory = self.dir_combo.currentText()
-        soundpacks_tab.game_dir_changed(directory)
-
-    def update_mods(self):
-        main_window = self.get_main_window()
-        central_widget = main_window.central_widget
-        mods_tab = central_widget.mods_tab
-
-        directory = self.dir_combo.currentText()
-        mods_tab.game_dir_changed(directory)
-
-    def update_backups(self):
-        main_window = self.get_main_window()
-        central_widget = main_window.central_widget
-        backups_tab = central_widget.backups_tab
-
-        directory = self.dir_combo.currentText()
-        backups_tab.game_dir_changed(directory)
-
-    def clear_soundpacks(self):
-        main_window = self.get_main_window()
-        central_widget = main_window.central_widget
-        soundpacks_tab = central_widget.soundpacks_tab
-
-        soundpacks_tab.clear_soundpacks()
-
-    def clear_mods(self):
-        main_window = self.get_main_window()
-        central_widget = main_window.central_widget
-        mods_tab = central_widget.mods_tab
-
-        mods_tab.clear_mods()
-
-    def clear_backups(self):
-        main_window = self.get_main_window()
-        central_widget = main_window.central_widget
-        backups_tab = central_widget.backups_tab
-
-        backups_tab.clear_backups()
-
-    def set_game_directory(self):
-        options = QFileDialog.DontResolveSymlinks | QFileDialog.ShowDirsOnly
-        directory = QFileDialog.getExistingDirectory(self,
-                _('Game directory'), self.dir_combo.currentText(),
-                options=options)
-        if directory:
-            self.set_dir_combo_value(clean_qt_path(directory))
-
-    def dc_index_changed(self, index):
-        if self.shown and not self.dir_combo_inserting:
-            self.game_directory_changed()
-
-    def game_directory_changed(self):
-        # Todo: OSX - Find game version
-        directory = self.dir_combo.currentText()
-
-        main_window = self.get_main_window()
-        status_bar = main_window.statusBar()
-        status_bar.clearMessage()
-        self.set_dir_state_icon('hide')
-
-        self.exe_path = None
-
-        main_tab = self.get_main_tab()
-        update_group_box = main_tab.update_group_box
-
-        dir_state = None
-        if ensure_slash(get_cddagl_path()).startswith(ensure_slash(directory)):
-            dir_state = 'critical'
-            self.set_dir_state_icon(dir_state)
-            self.version_value_label.setText(
-                _('Unknown version - Reason:') + ' ' +
-                _('CDDA Game Launcher files cannot be inside Game directory!')
-            )
-        elif os.path.isfile(directory):
-            dir_state = 'critical'
-            self.set_dir_state_icon(dir_state)
-            self.version_value_label.setText(
-                _('Unknown version - Reason:') + ' ' +
-                _('Game directory was set to a file!')
-            )
-        elif not os.path.isdir(directory):
-            dir_state = 'warning'
-            self.set_dir_state_icon(dir_state)
-            self.version_value_label.setText(
-                _('Unknown version - Reason:') + ' ' +
-                _("Game directory doesn't exist, Game is not installed here.")
-            )
-        else:
-            # Check for previous version
-            previous_version_dir = os.path.join(directory, 'previous_version')
-            self.restore_button.setEnabled(os.path.isdir(previous_version_dir))
-
-            # Find the executable
-            console_exe = os.path.join(directory, 'cataclysm.exe')
-            tiles_exe = os.path.join(directory, 'cataclysm-tiles.exe')
-
-            exe_path = None
-            version_type = None
-            if os.path.isfile(console_exe):
-                version_type = _('console')
-                exe_path = console_exe
-            elif os.path.isfile(tiles_exe):
-                version_type = _('tiles')
-                exe_path = tiles_exe
-
-            if version_type is None:
-                dir_state = 'warning'
-                self.set_dir_state_icon(dir_state)
-                self.version_value_label.setText(
-                    _('Unknown version - Reason:') + ' ' +
-                    _("Game is not installed in this directory.")
-                )
-            else:
-                dir_state = 'ok'
-                self.exe_path = exe_path
-                self.version_type = version_type
-                if self.last_game_directory != directory:
-                    self.version_value_label.setText(_('Analyzing...'))
-                    self.build_value_label.setText(_('Analyzing...'))
-                    self.saves_value_edit.setText(_('Analyzing...'))
-                    self.update_version()
-                    self.update_saves()
-                    self.update_soundpacks()
-                    self.update_mods()
-                    self.update_backups()
-
-        if self.exe_path is None:
-            self.launch_game_button.setEnabled(False)
-            update_group_box.update_button.setText(_('Install game'))
-            update_group_box.update_button.setEnabled(dir_state != 'critical')
-
-            self.restored_previous = False
-
-            self.current_build = None
-            self.build_value_label.setText(_('Unknown'))
-            self.saves_value_edit.setText(_('Unknown'))
-            self.clear_soundpacks()
-            self.clear_mods()
-            self.clear_backups()
-        else:
-            self.launch_game_button.setEnabled(True)
-            update_group_box.update_button.setText(_('Update game'))
-            update_group_box.update_button.setEnabled(dir_state == 'ok')
-
-            self.check_running_process(self.exe_path)
-
-        self.last_game_directory = directory
-        if not (getattr(sys, 'frozen', False)
-            and config_true(get_config_value('use_launcher_dir', 'False'))):
-            set_config_value('game_directory', directory)
-
-    @property
-    def app_locale(self):
-        return QApplication.instance().app_locale
-
-    def update_version(self):
-        raise NotImplementedError
-
-    def check_running_process(self, exe_path):
-        raise NotImplementedError
-
-    def add_game_dir(self):
-        raise NotImplementedError
-
-    def update_saves(self):
-        raise NotImplementedError
-
-    def analyse_new_build(self, build):
-        raise NotImplementedError
-
-
-class GameDirGroupBoxOSX(GameDirGroupBox):
-    def __init__(self):
-        super(GameDirGroupBoxOSX, self).__init__()
-
-
-class GameDirGroupBoxWin(GameDirGroupBox):
-    def __init__(self):
-        super(GameDirGroupBoxWin, self).__init__()
-
-    def restore_previous(self):
-        self.disable_controls()
-
-        main_tab = self.get_main_tab()
-        update_group_box = main_tab.update_group_box
-        update_group_box.disable_controls(True)
-
-        self.restored_previous = False
-
-        try:
-            game_dir = self.dir_combo.currentText()
-            previous_version_dir = os.path.join(game_dir, 'previous_version')
-
-            if os.path.isdir(previous_version_dir) and os.path.isdir(game_dir):
-
-                with tempfile.TemporaryDirectory(prefix=cons.TEMP_PREFIX
-                                                 ) as temp_move_dir:
-
-                    excluded_entries = set(['previous_version'])
-                    if config_true(get_config_value('prevent_save_move',
-                                                    'False')):
-                        excluded_entries.add('save')
-
-                    # Prevent moving the launcher if it's in the game directory
-                    if getattr(sys, 'frozen', False):
-                        launcher_exe = os.path.abspath(sys.executable)
-                        launcher_dir = os.path.dirname(launcher_exe)
-                        if os.path.abspath(game_dir) == launcher_dir:
-                            excluded_entries.add(os.path.basename(launcher_exe))
-
-                    for entry in os.listdir(game_dir):
-                        if entry not in excluded_entries:
-                            entry_path = os.path.join(game_dir, entry)
-                            shutil.move(entry_path, temp_move_dir)
-
-                    excluded_entries = set()
-                    if config_true(get_config_value('prevent_save_move', 'False')):
-                        excluded_entries.add('save')
-                    for entry in os.listdir(previous_version_dir):
-                        if entry not in excluded_entries:
-                            entry_path = os.path.join(previous_version_dir, entry)
-                            shutil.move(entry_path, game_dir)
-
-                    for entry in os.listdir(temp_move_dir):
-                        entry_path = os.path.join(temp_move_dir, entry)
-                        shutil.move(entry_path, previous_version_dir)
-
-                self.restored_previous = True
-        except OSError as e:
-            main_window = self.get_main_window()
-            status_bar = main_window.statusBar()
-
-            status_bar.showMessage(str(e))
-
-        self.last_game_directory = None
-        self.enable_controls()
-        update_group_box.enable_controls()
-        self.game_directory_changed()
-
-    def focus_game(self):
-        if self.game_process is None and self.game_process_id is None:
-            return
-
-        if self.game_process is not None:
-            pid = self.game_process.pid
-        elif self.game_process_id is not None:
-            pid = self.game_process_id
-
-        try:
-            activate_window(pid)
-        except (OSError, CDDASystemError):
-            # Can't activate window, we will assume that the game ended
-            self.game_ended()
-
-    def launch_game(self):
         if self.game_started:
             return self.focus_game()
 
@@ -611,12 +336,11 @@ class GameDirGroupBoxWin(GameDirGroupBox):
         if params != '':
             params = ' ' + params
 
-        cmd = '"{exe_path}"{params}'.format(exe_path=self.exe_path,
-                                            params=params)
+        cmd = '{exe_path}{params}'.format(exe_path=self.executable, params=params)
 
         try:
-            game_process = subprocess.Popen(cmd, cwd=exe_dir,
-                                            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+            # game_process = subprocess.Popen(cmd, cwd=exe_dir, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+            game_process = subprocess.Popen(cmd, cwd=exe_dir)
         except OSError as e:
             main_window = self.get_main_window()
             status_bar = main_window.statusBar()
@@ -696,6 +420,636 @@ antivirus whitelist or select the action to trust this binary when detected.</p>
             process_wait_thread.start()
 
             self.process_wait_thread = process_wait_thread
+
+    def game_ended(self):
+        raise NotImplementedError
+
+    def find_executable(self, directory):
+        raise NotImplementedError
+
+    def update_version(self):
+        raise NotImplementedError
+
+    def test_download_thread(self):
+        raise NotImplementedError
+
+    def check_running_process(self, exe_path):
+        # TODO: Verify that this works on OSX
+        pid = process_id_from_path(exe_path)
+
+        if pid is not None:
+            self.game_started = True
+            self.game_process_id = pid
+
+            main_window = self.get_main_window()
+            status_bar = main_window.statusBar()
+
+            if status_bar.busy == 0:
+                status_bar.showMessage(_('Game process is running'))
+
+            main_tab = self.get_main_tab()
+            update_group_box = main_tab.update_group_box
+
+            self.disable_controls()
+            update_group_box.disable_controls(True)
+
+            soundpacks_tab = main_tab.get_soundpacks_tab()
+            mods_tab = main_tab.get_mods_tab()
+            settings_tab = main_tab.get_settings_tab()
+            backups_tab = main_tab.get_backups_tab()
+
+            soundpacks_tab.disable_tab()
+            mods_tab.disable_tab()
+            settings_tab.disable_tab()
+            backups_tab.disable_tab()
+
+            self.launch_game_button.setText(_('Show current game'))
+            self.launch_game_button.setEnabled(True)
+
+            class ProcessWaitThread(QThread):
+                ended = pyqtSignal()
+
+                def __init__(self, pid):
+                    super(ProcessWaitThread, self).__init__()
+
+                    self.pid = pid
+
+                def __del__(self):
+                    self.wait()
+
+                def run(self):
+                    wait_for_pid(self.pid)
+                    self.ended.emit()
+
+            def process_ended():
+                self.process_wait_thread = None
+
+                self.game_process_id = None
+                self.game_started = False
+
+                status_bar.showMessage(_('Game process has ended'))
+
+                self.enable_controls()
+                update_group_box.enable_controls()
+
+                soundpacks_tab.enable_tab()
+                mods_tab.enable_tab()
+                settings_tab.enable_tab()
+                backups_tab.enable_tab()
+
+                self.launch_game_button.setText(_('Launch game'))
+
+                self.get_main_window().setWindowState(Qt.WindowActive)
+
+                self.update_saves()
+
+                if config_true(get_config_value('backup_on_end', 'False')):
+                    backups_tab.prune_auto_backups()
+
+                    name = '{auto}_{name}'.format(auto=_('auto'),
+                                                  name=_('after_end'))
+
+                    backups_tab.backup_saves(name)
+
+            process_wait_thread = ProcessWaitThread(self.game_process_id)
+            process_wait_thread.ended.connect(process_ended)
+            process_wait_thread.start()
+
+            self.process_wait_thread = process_wait_thread
+
+    def add_game_dir(self):
+        new_game_dir = self.dir_combo.currentText()
+
+        game_dirs = json.loads(get_config_value('game_directories', '[]'))
+
+        try:
+            index = game_dirs.index(new_game_dir)
+            if index > 0:
+                del game_dirs[index]
+                game_dirs.insert(0, new_game_dir)
+        except ValueError:
+            game_dirs.insert(0, new_game_dir)
+
+        if len(game_dirs) > cons.MAX_GAME_DIRECTORIES:
+            del game_dirs[cons.MAX_GAME_DIRECTORIES:]
+
+        set_config_value('game_directories', json.dumps(game_dirs))
+
+    def update_saves(self):
+        # TODO: OSX Does not find the saves properly
+        # TODO: We should maybe not backup the saves in the same way on OS/WIN
+
+        self.game_dir = self.dir_combo.currentText()
+
+        if (self.update_saves_timer is not None and self.update_saves_timer.isActive()):
+            self.update_saves_timer.stop()
+            self.saves_value_edit.setText(_('Unknown'))
+
+        save_dir = get_save_directory(self.game_dir)
+        if not os.path.isdir(save_dir):
+            self.saves_value_edit.setText(
+                '{world_count} {worlds} - {character_count} {characters}'
+                    .format(
+                    world_count=0,
+                    character_count=0,
+                    worlds=ngettext('World', 'Worlds', 0),
+                    characters=ngettext('Character', 'Characters', 0)
+                )
+            )
+            return
+
+        timer = QTimer(self)
+        self.update_saves_timer = timer
+
+        self.saves_size = 0
+        self.saves_worlds = 0
+        self.saves_characters = 0
+        self.world_dirs = set()
+
+        self.saves_scan = scandir(save_dir)
+        self.next_scans = []
+        self.save_dir = save_dir
+
+        def timeout():
+            try:
+                entry = next(self.saves_scan)
+                if entry.is_dir():
+                    self.next_scans.append(entry.path)
+                elif entry.is_file():
+                    self.saves_size += entry.stat().st_size
+
+                    if entry.name.endswith('.sav'):
+                        world_dir = os.path.dirname(entry.path)
+                        if self.save_dir == os.path.dirname(world_dir):
+                            self.saves_characters += 1
+
+                    if entry.name in cons.WORLD_FILES:
+                        world_dir = os.path.dirname(entry.path)
+                        if (world_dir not in self.world_dirs
+                                and self.save_dir == os.path.dirname(world_dir)):
+                            self.world_dirs.add(world_dir)
+                            self.saves_worlds += 1
+
+                worlds_text = ngettext('World', 'Worlds', self.saves_worlds)
+                characters_text = ngettext('Character', 'Characters', self.saves_characters)
+                self.saves_value_edit.setText(
+                    '{world_count} {worlds} - {character_count} {characters} ({size})'
+                        .format(
+                        world_count=self.saves_worlds,
+                        character_count=self.saves_characters,
+                        size=sizeof_fmt(self.saves_size),
+                        worlds=worlds_text,
+                        characters=characters_text
+                    )
+                )
+            except StopIteration:
+                if len(self.next_scans) > 0:
+                    self.saves_scan = scandir(self.next_scans.pop())
+                else:
+                    # End of the tree
+                    self.update_saves_timer.stop()
+                    self.update_saves_timer = None
+
+                    # no more path to scan but still 0 chars/worlds
+                    if self.saves_worlds == 0 and self.saves_characters == 0:
+                        self.saves_value_edit.setText(
+                            '{world_count} {worlds} - {character_count} {characters}'
+                                .format(
+                                world_count=0,
+                                character_count=0,
+                                worlds=ngettext('World', 'Worlds', 0),
+                                characters=ngettext('Character', 'Characters', 0)
+                            )
+                        )
+
+                    # Warning about saves size
+                    if (self.saves_size > cons.SAVES_WARNING_SIZE and
+                            not config_true(get_config_value('prevent_save_move', 'False'))):
+                        self.saves_warning_label.show()
+                    else:
+                        self.saves_warning_label.hide()
+
+        timer.timeout.connect(timeout)
+        timer.start(0)
+
+    def analyse_new_build(self, build):
+        raise NotImplementedError
+
+    def get_main_tab(self):
+        return self.parentWidget()
+
+    def get_main_window(self):
+        return self.get_main_tab().get_main_window()
+
+    def update_soundpacks(self):
+        main_window = self.get_main_window()
+        central_widget = main_window.central_widget
+        soundpacks_tab = central_widget.soundpacks_tab
+
+        directory = self.dir_combo.currentText()
+        soundpacks_tab.game_dir_changed(directory)
+
+    def update_mods(self):
+        main_window = self.get_main_window()
+        central_widget = main_window.central_widget
+        mods_tab = central_widget.mods_tab
+
+        directory = self.dir_combo.currentText()
+        mods_tab.game_dir_changed(directory)
+
+    def update_backups(self):
+        main_window = self.get_main_window()
+        central_widget = main_window.central_widget
+        backups_tab = central_widget.backups_tab
+
+        directory = self.dir_combo.currentText()
+        backups_tab.game_dir_changed(directory)
+
+    def clear_soundpacks(self):
+        main_window = self.get_main_window()
+        central_widget = main_window.central_widget
+        soundpacks_tab = central_widget.soundpacks_tab
+
+        soundpacks_tab.clear_soundpacks()
+
+    def clear_mods(self):
+        main_window = self.get_main_window()
+        central_widget = main_window.central_widget
+        mods_tab = central_widget.mods_tab
+
+        mods_tab.clear_mods()
+
+    def clear_backups(self):
+        main_window = self.get_main_window()
+        central_widget = main_window.central_widget
+        backups_tab = central_widget.backups_tab
+
+        backups_tab.clear_backups()
+
+    def set_game_directory(self):
+        options = QFileDialog.DontResolveSymlinks | QFileDialog.ShowDirsOnly
+        directory = QFileDialog.getExistingDirectory(self,
+                _('Game directory'), self.dir_combo.currentText(),
+                options=options)
+        if directory:
+            self.set_dir_combo_value(clean_qt_path(directory))
+
+    def dc_index_changed(self, index):
+        if self.shown and not self.dir_combo_inserting:
+            self.game_directory_changed()
+
+    def game_directory_changed(self):
+        logger.info("Game Directory Changed")
+        # Todo: OSX - Find game version
+        directory = self.dir_combo.currentText()
+
+        main_window = self.get_main_window()
+        status_bar = main_window.statusBar()
+        status_bar.clearMessage()
+        self.set_dir_state_icon('hide')
+
+        self.exe_path = None
+
+        main_tab = self.get_main_tab()
+        update_group_box = main_tab.update_group_box
+
+        dir_state = None
+        if ensure_slash(get_cddagl_path()).startswith(ensure_slash(directory)):
+            dir_state = 'critical'
+            self.set_dir_state_icon(dir_state)
+            self.version_value_label.setText(
+                _('Unknown version - Reason:') + ' ' +
+                _('CDDA Game Launcher files cannot be inside Game directory!')
+            )
+        elif os.path.isfile(directory):
+            dir_state = 'critical'
+            self.set_dir_state_icon(dir_state)
+            self.version_value_label.setText(
+                _('Unknown version - Reason:') + ' ' +
+                _('Game directory was set to a file!')
+            )
+        elif not os.path.isdir(directory):
+            dir_state = 'warning'
+            self.set_dir_state_icon(dir_state)
+            self.version_value_label.setText(
+                _('Unknown version - Reason:') + ' ' +
+                _("Game directory doesn't exist, Game is not installed here.")
+            )
+        else:
+            # Check for previous version
+            previous_version_dir = os.path.join(directory, 'previous_version')
+            self.restore_button.setEnabled(os.path.isdir(previous_version_dir))
+            logging.info("Checking for previous version")
+
+            # Finding the executable depending on OS
+            self.find_executable(directory)
+
+            if self.version_type is None:
+                dir_state = 'warning'
+                self.set_dir_state_icon(dir_state)
+                self.version_value_label.setText(
+                    _('Unknown version - Reason:') + ' ' +
+                    _("Game is not installed in this directory.")
+                )
+            else:
+                dir_state = "ok"
+                if self.last_game_directory != directory:
+                    self.version_value_label.setText(_('Analyzing...'))
+                    self.build_value_label.setText(_('Analyzing...'))
+                    self.saves_value_edit.setText(_('Analyzing...'))
+                    self.update_version()
+                    self.update_saves()
+                    self.update_soundpacks()
+                    self.update_mods()
+                    self.update_backups()
+
+            if self.exe_path is None:
+                self.launch_game_button.setEnabled(False)
+                update_group_box.update_button.setText(_('Install game'))
+                update_group_box.update_button.setEnabled(dir_state != 'critical')
+
+                self.restored_previous = False
+
+                self.current_build = None
+                self.build_value_label.setText(_('Unknown'))
+                self.saves_value_edit.setText(_('Unknown'))
+                self.clear_soundpacks()
+                self.clear_mods()
+                self.clear_backups()
+            else:
+
+                self.launch_game_button.setEnabled(True)
+                update_group_box.update_button.setText(_('Update game'))
+                update_group_box.update_button.setEnabled(dir_state == 'ok')
+
+                self.check_running_process(self.exe_path)
+
+            self.last_game_directory = directory
+            if not (getattr(sys, 'frozen', False)
+                    and config_true(get_config_value('use_launcher_dir', 'False'))):
+                set_config_value('game_directory', directory)
+
+    @property
+    def app_locale(self):
+        return QApplication.instance().app_locale
+
+    @property
+    def executable(self):
+        return '"{}"'.format(self.exe_path)
+
+
+class GameDirGroupBoxOSX(GameDirGroupBox):
+    def __init__(self):
+        super(GameDirGroupBoxOSX, self).__init__()
+
+    def restore_previous(self):
+        raise NotImplementedError
+
+    def focus_game(self):
+        raise NotImplementedError
+
+    def game_ended(self):
+        raise NotImplementedError
+
+    def find_executable(self, directory):
+        console_exe = os.path.join(directory, 'Cataclysm.app', "Contents", "Resources", "cataclysm")
+        tiles_exe = os.path.join(directory, 'Cataclysm.app', "Contents", "Resources", "cataclysm-tiles")
+        exe_path = None
+        version_type = None
+        if os.path.isfile(console_exe):
+            version_type = _('console')
+            exe_path = console_exe
+        elif os.path.isfile(tiles_exe):
+            version_type = _('tiles')
+            exe_path = tiles_exe
+
+        self.exe_path = exe_path
+        self.version_type = version_type
+
+    @property
+    def executable(self):
+        return os.path.join(os.path.dirname(self.exe_path), "..", "MacOS", "Cataclysm.sh")
+
+    def update_version(self):
+
+        main_window = self.get_main_window()
+        status_bar = main_window.statusBar()
+
+        if (self.exe_reading_timer is not None
+                and self.exe_reading_timer.isActive()):
+            self.exe_reading_timer.stop()
+
+            status_bar = main_window.statusBar()
+            status_bar.removeWidget(self.reading_label)
+            status_bar.removeWidget(self.reading_progress_bar)
+
+            status_bar.busy -= 1
+
+        status_bar.clearMessage()
+        status_bar.busy += 1
+
+        reading_label = QLabel()
+        reading_label.setText(_('Reading: {0}').format(self.exe_path))
+        status_bar.addWidget(reading_label, 100)
+        self.reading_label = reading_label
+
+        progress_bar = QProgressBar()
+        status_bar.addWidget(progress_bar)
+        self.reading_progress_bar = progress_bar
+
+        timer = QTimer(self)
+        self.exe_reading_timer = timer
+
+        exe_size = os.path.getsize(self.exe_path)
+
+        progress_bar.setRange(0, exe_size)
+        self.exe_total_read = 0
+
+        self.exe_sha256 = hashlib.sha256()
+        self.last_bytes = None
+        self.game_version = ''
+        self.opened_exe = open(self.exe_path, 'rb')
+
+        def timeout():
+            bytes = self.opened_exe.read(cons.READ_BUFFER_SIZE)
+            if len(bytes) == 0:
+                self.opened_exe.close()
+                self.exe_reading_timer.stop()
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+
+                status_bar.removeWidget(self.reading_label)
+                status_bar.removeWidget(self.reading_progress_bar)
+
+                status_bar.busy -= 1
+                if status_bar.busy == 0 and not self.game_started:
+                    if self.restored_previous:
+                        status_bar.showMessage(
+                            _('Previous version restored'))
+                    else:
+                        status_bar.showMessage(_('Ready'))
+
+                if status_bar.busy == 0 and self.game_started:
+                    status_bar.showMessage(_('Game process is running'))
+
+                sha256 = self.exe_sha256.hexdigest()
+
+                stable_version = cons.STABLE_SHA256.get(sha256, None)
+                is_stable = stable_version is not None
+
+                if is_stable:
+                    self.game_version = stable_version
+                    logger.info("Game Version is stable")
+                if self.game_version == '':
+                    self.game_version = _('Unknown')
+                    logger.info("Game Version is Unknown")
+                else:
+                    logger.info("Game Version is ?")
+                    self.add_game_dir()
+
+                self.version_value_label.setText(
+                    '{version} ({type})'
+                        .format(version=self.game_version, type=self.version_type)
+                )
+
+                new_version(self.game_version, sha256, is_stable)
+
+                build = get_build_from_sha256(sha256)
+
+                if build is not None:
+                    build_date = arrow.get(build['released_on'], 'UTC')
+                    human_delta = build_date.humanize(arrow.utcnow(), locale=self.app_locale)
+                    self.build_value_label.setText(
+                        '{build} ({time_delta})'
+                            .format(build=build['build'], time_delta=human_delta)
+                    )
+                    self.current_build = build['build']
+
+                    main_tab = self.get_main_tab()
+                    update_group_box = main_tab.update_group_box
+
+                    if (update_group_box.builds is not None
+                            and len(update_group_box.builds) > 0
+                            and status_bar.busy == 0
+                            and not self.game_started):
+                        last_build = update_group_box.builds[0]
+
+                        message = status_bar.currentMessage()
+                        if message != '':
+                            message = message + ' - '
+
+                        if last_build['number'] == self.current_build:
+                            message = message + _('Your game is up to date')
+                        else:
+                            message = message + _('There is a new update available')
+                        status_bar.showMessage(message)
+
+                else:
+                    self.build_value_label.setText(_('Unknown'))
+                    self.current_build = None
+
+            else:
+                last_frame = bytes
+                if self.last_bytes is not None:
+                    last_frame = self.last_bytes + last_frame
+
+                match = re.search(
+                    b'(?P<version>[01]\\.[A-F](-\\d+-g[0-9a-f]+)?)\\x00',
+                    last_frame)
+                if match is not None:
+                    game_version = match.group('version').decode('ascii')
+                    if len(game_version) > len(self.game_version):
+                        self.game_version = game_version
+
+                self.exe_total_read += len(bytes)
+                self.reading_progress_bar.setValue(self.exe_total_read)
+                self.exe_sha256.update(bytes)
+                self.last_bytes = bytes
+
+        timer.timeout.connect(timeout)
+        timer.start(0)
+
+    def analyse_new_build(self, build):
+        raise NotImplementedError
+
+
+class GameDirGroupBoxWin(GameDirGroupBox):
+    def __init__(self):
+        super(GameDirGroupBoxWin, self).__init__()
+
+    def restore_previous(self):
+        self.disable_controls()
+
+        main_tab = self.get_main_tab()
+        update_group_box = main_tab.update_group_box
+        update_group_box.disable_controls(True)
+
+        self.restored_previous = False
+
+        try:
+            game_dir = self.dir_combo.currentText()
+            previous_version_dir = os.path.join(game_dir, 'previous_version')
+
+            if os.path.isdir(previous_version_dir) and os.path.isdir(game_dir):
+
+                with tempfile.TemporaryDirectory(prefix=cons.TEMP_PREFIX
+                                                 ) as temp_move_dir:
+
+                    excluded_entries = set(['previous_version'])
+                    if config_true(get_config_value('prevent_save_move',
+                                                    'False')):
+                        excluded_entries.add('save')
+
+                    # Prevent moving the launcher if it's in the game directory
+                    if getattr(sys, 'frozen', False):
+                        launcher_exe = os.path.abspath(sys.executable)
+                        launcher_dir = os.path.dirname(launcher_exe)
+                        if os.path.abspath(game_dir) == launcher_dir:
+                            excluded_entries.add(os.path.basename(launcher_exe))
+
+                    for entry in os.listdir(game_dir):
+                        if entry not in excluded_entries:
+                            entry_path = os.path.join(game_dir, entry)
+                            shutil.move(entry_path, temp_move_dir)
+
+                    excluded_entries = set()
+                    if config_true(get_config_value('prevent_save_move', 'False')):
+                        excluded_entries.add('save')
+                    for entry in os.listdir(previous_version_dir):
+                        if entry not in excluded_entries:
+                            entry_path = os.path.join(previous_version_dir, entry)
+                            shutil.move(entry_path, game_dir)
+
+                    for entry in os.listdir(temp_move_dir):
+                        entry_path = os.path.join(temp_move_dir, entry)
+                        shutil.move(entry_path, previous_version_dir)
+
+                self.restored_previous = True
+        except OSError as e:
+            main_window = self.get_main_window()
+            status_bar = main_window.statusBar()
+
+            status_bar.showMessage(str(e))
+
+        self.last_game_directory = None
+        self.enable_controls()
+        update_group_box.enable_controls()
+        self.game_directory_changed()
+
+    def focus_game(self):
+        if self.game_process is None and self.game_process_id is None:
+            return
+
+        if self.game_process is not None:
+            pid = self.game_process.pid
+        elif self.game_process_id is not None:
+            pid = self.game_process_id
+
+        try:
+            activate_window(pid)
+        except (OSError, CDDASystemError):
+            # Can't activate window, we will assume that the game ended
+            self.game_ended()
 
     def game_ended(self):
         if self.process_wait_thread is not None:
@@ -876,201 +1230,6 @@ antivirus whitelist or select the action to trust this binary when detected.</p>
         timer.timeout.connect(timeout)
         timer.start(0)
 
-    def check_running_process(self, exe_path):
-        pid = process_id_from_path(exe_path)
-
-        if pid is not None:
-            self.game_started = True
-            self.game_process_id = pid
-
-            main_window = self.get_main_window()
-            status_bar = main_window.statusBar()
-
-            if status_bar.busy == 0:
-                status_bar.showMessage(_('Game process is running'))
-
-            main_tab = self.get_main_tab()
-            update_group_box = main_tab.update_group_box
-
-            self.disable_controls()
-            update_group_box.disable_controls(True)
-
-            soundpacks_tab = main_tab.get_soundpacks_tab()
-            mods_tab = main_tab.get_mods_tab()
-            settings_tab = main_tab.get_settings_tab()
-            backups_tab = main_tab.get_backups_tab()
-
-            soundpacks_tab.disable_tab()
-            mods_tab.disable_tab()
-            settings_tab.disable_tab()
-            backups_tab.disable_tab()
-
-            self.launch_game_button.setText(_('Show current game'))
-            self.launch_game_button.setEnabled(True)
-
-            class ProcessWaitThread(QThread):
-                ended = pyqtSignal()
-
-                def __init__(self, pid):
-                    super(ProcessWaitThread, self).__init__()
-
-                    self.pid = pid
-
-                def __del__(self):
-                    self.wait()
-
-                def run(self):
-                    wait_for_pid(self.pid)
-                    self.ended.emit()
-
-            def process_ended():
-                self.process_wait_thread = None
-
-                self.game_process_id = None
-                self.game_started = False
-
-                status_bar.showMessage(_('Game process has ended'))
-
-                self.enable_controls()
-                update_group_box.enable_controls()
-
-                soundpacks_tab.enable_tab()
-                mods_tab.enable_tab()
-                settings_tab.enable_tab()
-                backups_tab.enable_tab()
-
-                self.launch_game_button.setText(_('Launch game'))
-
-                self.get_main_window().setWindowState(Qt.WindowActive)
-
-                self.update_saves()
-
-                if config_true(get_config_value('backup_on_end', 'False')):
-                    backups_tab.prune_auto_backups()
-
-                    name = '{auto}_{name}'.format(auto=_('auto'),
-                                                  name=_('after_end'))
-
-                    backups_tab.backup_saves(name)
-
-            process_wait_thread = ProcessWaitThread(self.game_process_id)
-            process_wait_thread.ended.connect(process_ended)
-            process_wait_thread.start()
-
-            self.process_wait_thread = process_wait_thread
-
-    def add_game_dir(self):
-        new_game_dir = self.dir_combo.currentText()
-
-        game_dirs = json.loads(get_config_value('game_directories', '[]'))
-
-        try:
-            index = game_dirs.index(new_game_dir)
-            if index > 0:
-                del game_dirs[index]
-                game_dirs.insert(0, new_game_dir)
-        except ValueError:
-            game_dirs.insert(0, new_game_dir)
-
-        if len(game_dirs) > cons.MAX_GAME_DIRECTORIES:
-            del game_dirs[cons.MAX_GAME_DIRECTORIES:]
-
-        set_config_value('game_directories', json.dumps(game_dirs))
-
-    def update_saves(self):
-        self.game_dir = self.dir_combo.currentText()
-
-        if (self.update_saves_timer is not None and self.update_saves_timer.isActive()):
-            self.update_saves_timer.stop()
-            self.saves_value_edit.setText(_('Unknown'))
-
-        save_dir = os.path.join(self.game_dir, 'save')
-        if not os.path.isdir(save_dir):
-            self.saves_value_edit.setText(
-                '{world_count} {worlds} - {character_count} {characters}'
-                    .format(
-                    world_count=0,
-                    character_count=0,
-                    worlds=ngettext('World', 'Worlds', 0),
-                    characters=ngettext('Character', 'Characters', 0)
-                )
-            )
-            return
-
-        timer = QTimer(self)
-        self.update_saves_timer = timer
-
-        self.saves_size = 0
-        self.saves_worlds = 0
-        self.saves_characters = 0
-        self.world_dirs = set()
-
-        self.saves_scan = scandir(save_dir)
-        self.next_scans = []
-        self.save_dir = save_dir
-
-        def timeout():
-            try:
-                entry = next(self.saves_scan)
-                if entry.is_dir():
-                    self.next_scans.append(entry.path)
-                elif entry.is_file():
-                    self.saves_size += entry.stat().st_size
-
-                    if entry.name.endswith('.sav'):
-                        world_dir = os.path.dirname(entry.path)
-                        if self.save_dir == os.path.dirname(world_dir):
-                            self.saves_characters += 1
-
-                    if entry.name in cons.WORLD_FILES:
-                        world_dir = os.path.dirname(entry.path)
-                        if (world_dir not in self.world_dirs
-                                and self.save_dir == os.path.dirname(world_dir)):
-                            self.world_dirs.add(world_dir)
-                            self.saves_worlds += 1
-
-                worlds_text = ngettext('World', 'Worlds', self.saves_worlds)
-                characters_text = ngettext('Character', 'Characters', self.saves_characters)
-                self.saves_value_edit.setText(
-                    '{world_count} {worlds} - {character_count} {characters} ({size})'
-                        .format(
-                        world_count=self.saves_worlds,
-                        character_count=self.saves_characters,
-                        size=sizeof_fmt(self.saves_size),
-                        worlds=worlds_text,
-                        characters=characters_text
-                    )
-                )
-            except StopIteration:
-                if len(self.next_scans) > 0:
-                    self.saves_scan = scandir(self.next_scans.pop())
-                else:
-                    # End of the tree
-                    self.update_saves_timer.stop()
-                    self.update_saves_timer = None
-
-                    # no more path to scan but still 0 chars/worlds
-                    if self.saves_worlds == 0 and self.saves_characters == 0:
-                        self.saves_value_edit.setText(
-                            '{world_count} {worlds} - {character_count} {characters}'
-                                .format(
-                                world_count=0,
-                                character_count=0,
-                                worlds=ngettext('World', 'Worlds', 0),
-                                characters=ngettext('Character', 'Characters', 0)
-                            )
-                        )
-
-                    # Warning about saves size
-                    if (self.saves_size > cons.SAVES_WARNING_SIZE and
-                            not config_true(get_config_value('prevent_save_move', 'False'))):
-                        self.saves_warning_label.show()
-                    else:
-                        self.saves_warning_label.hide()
-
-        timer.timeout.connect(timeout)
-        timer.start(0)
-
     def analyse_new_build(self, build):
         game_dir = self.dir_combo.currentText()
 
@@ -1216,6 +1375,22 @@ antivirus whitelist or select the action to trust this binary when detected.</p>
             timer.timeout.connect(timeout)
             timer.start(0)
 
+    def find_executable(self, directory):
+        console_exe = os.path.join(directory, 'cataclysm.exe')
+        tiles_exe = os.path.join(directory, 'cataclysm-tiles.exe')
+
+        exe_path = None
+        version_type = None
+        if os.path.isfile(console_exe):
+            version_type = _('console')
+            exe_path = console_exe
+        elif os.path.isfile(tiles_exe):
+            version_type = _('tiles')
+            exe_path = tiles_exe
+
+        self.exe_path = exe_path
+        self.version_type = version_type
+
 
 class UpdateGroupBox(QGroupBox):
     def __init__(self):
@@ -1355,10 +1530,287 @@ class UpdateGroupBox(QGroupBox):
         self.shown = True
 
     def update_game(self):
-        raise NotImplementedError
+        if not self.updating:
+            if self.builds is None or len(self.builds) < 1:
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+
+                status_bar.showMessage(_('Cannot update or install the game '
+                                         'since no build was found'))
+                return
+
+            main_tab = self.get_main_tab()
+            game_dir_group_box = main_tab.game_dir_group_box
+            game_dir = game_dir_group_box.dir_combo.currentText()
+
+            # Check if we are installing in an empty directory
+            if game_dir_group_box.exe_path is None and os.path.exists(game_dir) and os.path.isdir(game_dir):
+
+                current_scan = scandir(game_dir)
+                game_dir_empty = True
+
+                try:
+                    next(current_scan)
+                    game_dir_empty = False
+                except StopIteration:
+                    pass
+
+                if not game_dir_empty:
+                    subdir_name = 'cdda'
+                    subdir = os.path.join(game_dir, subdir_name)
+
+                    while os.path.exists(subdir):
+                        subdir_name = 'cdda-{0}'.format('%08x' % random.randrange(16 ** 8))
+                        subdir = os.path.join(game_dir, subdir_name)
+
+                    new_subdirectory_msgbox = QMessageBox()
+                    new_subdirectory_msgbox.setWindowTitle(_('Install directory is not empty'))
+                    new_subdirectory_msgbox.setText(_('You cannot install the game in a directory '
+                                                      'that is not empty. We can quickly proceed with a new subdirectory.'
+                                                      ))
+                    new_subdirectory_msgbox.setInformativeText(_('Can we create a new empty '
+                                                                 'subdirectory to proceed?'))
+                    new_subdirectory_msgbox.addButton(_('Create the {name} subdirectory and '
+                                                        'proceed').format(name=subdir_name),
+                                                      QMessageBox.YesRole)
+                    new_subdirectory_msgbox.addButton(_('I will choose or create a different '
+                                                        'directory'), QMessageBox.NoRole)
+                    new_subdirectory_msgbox.setIcon(QMessageBox.Question)
+
+                    if new_subdirectory_msgbox.exec() == 1:
+                        return
+
+                    os.makedirs(subdir)
+                    game_dir = subdir
+                    game_dir_group_box.set_dir_combo_value(subdir)
+
+            logger.info(
+                'Updating CDDA...\n'
+                'CDDAGL Directory: {}\n'
+                'CDDA Directory: {}'
+                    .format(get_cddagl_path(), game_dir)
+            )
+            self.updating = True
+            self.download_aborted = False
+            self.clearing_previous_dir = False
+            self.backing_up_game = False
+            self.extracting_new_build = False
+            self.analysing_new_build = False
+            self.in_post_extraction = False
+
+            self.selected_build = self.builds[self.builds_combo.currentIndex()]
+
+            selected_branch = self.branch_button_group.checkedButton()
+            experimental_selected = selected_branch is self.experimental_radio_button
+
+            latest_build = self.builds[0]
+            if experimental_selected and game_dir_group_box.current_build == latest_build['number']:
+                confirm_msgbox = QMessageBox()
+                confirm_msgbox.setWindowTitle(_('Game is up to date'))
+                confirm_msgbox.setText(_('You already have the latest version.'
+                                         ))
+                confirm_msgbox.setInformativeText(_('Are you sure you want to '
+                                                    'update your game?'))
+                confirm_msgbox.addButton(_('Update the game again'),
+                                         QMessageBox.YesRole)
+                confirm_msgbox.addButton(_('I do not need to update the '
+                                           'game again'), QMessageBox.NoRole)
+                confirm_msgbox.setIcon(QMessageBox.Question)
+
+                if confirm_msgbox.exec() == 1:
+                    self.updating = False
+                    return
+
+            game_dir_group_box.disable_controls()
+            self.disable_controls()
+
+            soundpacks_tab = main_tab.get_soundpacks_tab()
+            mods_tab = main_tab.get_mods_tab()
+            settings_tab = main_tab.get_settings_tab()
+            backups_tab = main_tab.get_backups_tab()
+
+            soundpacks_tab.disable_tab()
+            mods_tab.disable_tab()
+            settings_tab.disable_tab()
+            backups_tab.disable_tab()
+
+            try:
+                if not os.path.exists(game_dir):
+                    os.makedirs(game_dir)
+                elif os.path.isfile(game_dir):
+                    main_window = self.get_main_window()
+                    status_bar = main_window.statusBar()
+
+                    status_bar.showMessage(_('Cannot install game on a file'))
+
+                    self.finish_updating()
+                    return
+
+                download_dir = tempfile.mkdtemp(prefix=cons.TEMP_PREFIX)
+
+                download_url = self.selected_build['url']
+
+                url = QUrl(download_url)
+                file_info = QFileInfo(url.path())
+                file_name = file_info.fileName()
+
+                self.downloaded_file = os.path.join(download_dir, file_name)
+                self.downloading_file = open(self.downloaded_file, 'wb')
+
+                self.download_game_update(download_url)
+
+            except OSError as e:
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+
+                self.finish_updating()
+
+                status_bar.showMessage(str(e))
+        else:
+            main_tab = self.get_main_tab()
+            game_dir_group_box = main_tab.game_dir_group_box
+
+            # Are we downloading the file?
+            if self.download_http_reply.isRunning():
+                self.download_aborted = True
+                self.download_http_reply.abort()
+
+                main_window = self.get_main_window()
+
+                status_bar = main_window.statusBar()
+
+                if game_dir_group_box.exe_path is not None:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Update cancelled'))
+                else:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Installation cancelled'))
+            elif self.clearing_previous_dir:
+                if self.progress_rmtree is not None:
+                    self.progress_rmtree.stop()
+            elif self.backing_up_game:
+                self.backup_timer.stop()
+
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+
+                status_bar.removeWidget(self.backup_label)
+                status_bar.removeWidget(self.backup_progress_bar)
+
+                status_bar.busy -= 1
+
+                self.restore_backup()
+
+                if game_dir_group_box.exe_path is not None:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Update cancelled'))
+                else:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Installation cancelled'))
+
+            elif self.extracting_new_build:
+                self.extracting_timer.stop()
+
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+
+                status_bar.removeWidget(self.extracting_label)
+                status_bar.removeWidget(self.extracting_progress_bar)
+
+                status_bar.busy -= 1
+                self.extracting_zipfile.close()
+
+                download_dir = os.path.dirname(self.downloaded_file)
+                delete_path(download_dir)
+
+                path = self.clean_game_dir()
+                self.restore_backup()
+                self.restore_previous_content(path)
+
+                if path is not None:
+                    delete_path(path)
+
+                if game_dir_group_box.exe_path is not None:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Update cancelled'))
+                else:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Installation cancelled'))
+            elif self.analysing_new_build:
+                game_dir_group_box.opened_exe.close()
+                game_dir_group_box.exe_reading_timer.stop()
+
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+
+                status_bar.removeWidget(game_dir_group_box.reading_label)
+                status_bar.removeWidget(game_dir_group_box.reading_progress_bar)
+
+                status_bar.busy -= 1
+
+                path = self.clean_game_dir()
+                self.restore_backup()
+                self.restore_previous_content(path)
+
+                if path is not None:
+                    delete_path(path)
+
+                if game_dir_group_box.exe_path is not None:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Update cancelled'))
+                else:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Installation cancelled'))
+            elif self.in_post_extraction:
+                self.in_post_extraction = False
+
+                if self.progress_copy is not None:
+                    self.progress_copy.stop()
+
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+                status_bar.clearMessage()
+
+                path = self.clean_game_dir()
+                self.restore_backup()
+                self.restore_previous_content(path)
+
+                if path is not None:
+                    delete_path(path)
+
+                if game_dir_group_box.exe_path is not None:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Update cancelled'))
+                else:
+                    if status_bar.busy == 0:
+                        status_bar.showMessage(_('Installation cancelled'))
+
+            self.finish_updating()
 
     def clean_game_dir(self):
-        raise NotImplementedError
+        game_dir = self.game_dir
+        dir_list = os.listdir(game_dir)
+        if len(dir_list) == 0 or (
+                len(dir_list) == 1 and dir_list[0] == 'previous_version'):
+            return None
+
+        temp_move_dir = tempfile.mkdtemp(prefix=cons.TEMP_PREFIX)
+
+        excluded_entries = set(['previous_version'])
+        if config_true(get_config_value('prevent_save_move', 'False')):
+            excluded_entries.add('save')
+        # Prevent moving the launcher if it's in the game directory
+        if getattr(sys, 'frozen', False):
+            launcher_exe = os.path.abspath(sys.executable)
+            launcher_dir = os.path.dirname(launcher_exe)
+            if os.path.abspath(game_dir) == launcher_dir:
+                excluded_entries.add(os.path.basename(launcher_exe))
+        for entry in dir_list:
+            if entry not in excluded_entries:
+                entry_path = os.path.join(game_dir, entry)
+                shutil.move(entry_path, temp_move_dir)
+
+        return temp_move_dir
 
     def restore_previous_content(self, path):
         raise NotImplementedError
@@ -1514,31 +1966,6 @@ class UpdateGroupBox(QGroupBox):
             # Test downloaded file
             status_bar.showMessage(_('Testing downloaded file archive'))
 
-            class TestingZipThread(QThread):
-                completed = pyqtSignal()
-                invalid = pyqtSignal()
-                not_downloaded = pyqtSignal()
-
-                def __init__(self, downloaded_file):
-                    super(TestingZipThread, self).__init__()
-
-                    self.downloaded_file = downloaded_file
-
-                def __del__(self):
-                    self.wait()
-
-                def run(self):
-                    try:
-                        with zipfile.ZipFile(self.downloaded_file) as z:
-                            if z.testzip() is not None:
-                                self.invalid.emit()
-                                return
-                    except zipfile.BadZipFile:
-                        self.not_downloaded.emit()
-                        return
-
-                    self.completed.emit()
-
             def completed_test():
                 self.test_thread = None
 
@@ -1565,7 +1992,8 @@ class UpdateGroupBox(QGroupBox):
                 delete_path(download_dir)
                 self.finish_updating()
 
-            test_thread = TestingZipThread(self.downloaded_file)
+            test_thread = self.test_download_thread(self.downloaded_file)
+
             test_thread.completed.connect(completed_test)
             test_thread.invalid.connect(invalid)
             test_thread.not_downloaded.connect(not_downloaded)
@@ -1713,100 +2141,7 @@ class UpdateGroupBox(QGroupBox):
             self.extract_new_build()
 
     def extract_new_build(self):
-        self.extracting_new_build = True
-
-        z = zipfile.ZipFile(self.downloaded_file)
-        self.extracting_zipfile = z
-
-        self.extracting_infolist = z.infolist()
-        self.extracting_index = 0
-
-        main_window = self.get_main_window()
-        status_bar = main_window.statusBar()
-
-        status_bar.busy += 1
-
-        extracting_label = QLabel()
-        status_bar.addWidget(extracting_label, 100)
-        self.extracting_label = extracting_label
-
-        progress_bar = QProgressBar()
-        status_bar.addWidget(progress_bar)
-        self.extracting_progress_bar = progress_bar
-
-        timer = QTimer(self)
-        self.extracting_timer = timer
-
-        progress_bar.setRange(0, len(self.extracting_infolist))
-
-        def timeout():
-            self.extracting_progress_bar.setValue(self.extracting_index)
-
-            if self.extracting_index == len(self.extracting_infolist):
-                self.extracting_timer.stop()
-
-                main_window = self.get_main_window()
-                status_bar = main_window.statusBar()
-
-                status_bar.removeWidget(self.extracting_label)
-                status_bar.removeWidget(self.extracting_progress_bar)
-
-                status_bar.busy -= 1
-
-                self.extracting_new_build = False
-
-                self.extracting_zipfile.close()
-
-                # Keep a copy of the archive if selected in the settings
-                if config_true(get_config_value('keep_archive_copy', 'False')):
-                    archive_dir = get_config_value('archive_directory', '')
-                    archive_name = os.path.basename(self.downloaded_file)
-                    move_target = os.path.join(archive_dir, archive_name)
-                    if (os.path.isdir(archive_dir)
-                        and not os.path.exists(move_target)):
-                        shutil.move(self.downloaded_file, archive_dir)
-
-                download_dir = os.path.dirname(self.downloaded_file)
-                delete_path(download_dir)
-
-                main_tab = self.get_main_tab()
-                game_dir_group_box = main_tab.game_dir_group_box
-
-                self.analysing_new_build = True
-                game_dir_group_box.analyse_new_build(self.selected_build)
-
-            else:
-                extracting_element = self.extracting_infolist[
-                    self.extracting_index]
-                self.extracting_label.setText(_('Extracting {0}').format(
-                    extracting_element.filename))
-
-                try:
-                    self.extracting_zipfile.extract(extracting_element,
-                        self.game_dir)
-                except OSError as e:
-                    # Display the error and stop the update process
-                    error_msgbox = QMessageBox()
-                    error_msgbox.setWindowTitle(
-                        _('Cannot extract game archive'))
-
-                    text = _('''
-<p>The launcher failed to extract the game archive.</p>
-<p>It received the following error from the operating system: {error}</p>'''
-                        ).format(error=html.escape(e.strerror))
-
-                    error_msgbox.setText(text)
-                    error_msgbox.addButton(_('OK'), QMessageBox.YesRole)
-                    error_msgbox.setIcon(QMessageBox.Critical)
-
-                    error_msgbox.exec()
-
-                    self.update_game()
-
-                self.extracting_index += 1
-
-        timer.timeout.connect(timeout)
-        timer.start(0)
+        raise NotImplementedError
 
     def asset_name(self, path, filename):
         asset_file = os.path.join(path, filename)
@@ -2715,17 +3050,71 @@ class UpdateGroupBoxOSX(UpdateGroupBox):
     def disable_radio_buttons(self):
         self.osx_radio_button.setEnabled(False)
 
-    def update_game(self):
-        raise NotImplementedError
-
-    def clean_game_dir(self):
-        raise NotImplementedError
-
     def restore_previous_content(self, path):
         raise NotImplementedError
 
     def restore_backup(self):
         raise NotImplementedError
+
+    def extract_new_build(self):
+        from cddagl.system import mount, unmount
+
+
+        main_window = self.get_main_window()
+        status_bar = main_window.statusBar()
+        extracting_label = QLabel()
+        status_bar.addWidget(extracting_label, 100)
+        self.extracting_label = extracting_label
+
+        self.extracting_new_build = True
+
+        # These needs to be here to mirror the Win implementation
+        # TODO: Remove the need for them
+        self.extracting_zipfile = tempfile.TemporaryFile()
+        timer = QTimer(self)
+        self.extracting_timer = timer
+
+        progress_bar = QProgressBar()
+        status_bar.addWidget(progress_bar)
+        self.extracting_progress_bar = progress_bar
+        # End of mirror
+
+        mount_point, _ = mount(self.downloaded_file)
+        if mount_point:
+            mount_point = mount_point[0]
+        else:
+            logger.info("Could not mount DMG")
+
+        shutil.copytree(os.path.join(mount_point, self.base_asset['Name'] + ".app"),
+                        os.path.join(self.game_dir, "Cataclysm.app"), True,
+                        ignore=lambda path, files: self.extracting_label.setText(_('Extracting {0}').format(path)))
+
+        unmount(mount_point)
+        self.extracting_timer.stop()
+        status_bar.removeWidget(self.extracting_label)
+
+    def test_download_thread(self, downloaded_file):
+        class TestingWinZipThread(QThread):
+            completed = pyqtSignal()
+            invalid = pyqtSignal()
+            not_downloaded = pyqtSignal()
+
+            def __init__(self, downloaded_file):
+                super(TestingWinZipThread, self).__init__()
+
+                self.downloaded_file = downloaded_file
+
+            def __del__(self):
+                self.wait()
+
+            def run(self):
+                # TODO: Extend this test, it might be a bit naive
+                if not os.path.exists(self.downloaded_file):
+                    self.not_downloaded.emit()
+                    return
+                self.completed.emit()
+
+        return TestingWinZipThread(downloaded_file)
 
 
 class UpdateGroupBoxWin(UpdateGroupBox):
@@ -2756,292 +3145,6 @@ class UpdateGroupBoxWin(UpdateGroupBox):
         self.x86_radio_button.setEnabled(False)
         self.x64_radio_button.setEnabled(False)
 
-    def update_game(self):
-        if not self.updating:
-            if self.builds is None or len(self.builds) < 1:
-                main_window = self.get_main_window()
-                status_bar = main_window.statusBar()
-
-                status_bar.showMessage(_('Cannot update or install the game '
-                                         'since no build was found'))
-                return
-
-            main_tab = self.get_main_tab()
-            game_dir_group_box = main_tab.game_dir_group_box
-            game_dir = game_dir_group_box.dir_combo.currentText()
-
-            # Check if we are installing in an empty directory
-            if (game_dir_group_box.exe_path is None and
-                    os.path.exists(game_dir) and
-                    os.path.isdir(game_dir)):
-
-                current_scan = scandir(game_dir)
-                game_dir_empty = True
-
-                try:
-                    next(current_scan)
-                    game_dir_empty = False
-                except StopIteration:
-                    pass
-
-                if not game_dir_empty:
-                    subdir_name = 'cdda'
-                    subdir = os.path.join(game_dir, subdir_name)
-
-                    while os.path.exists(subdir):
-                        subdir_name = 'cdda-{0}'.format('%08x' % random.randrange(16 ** 8))
-                        subdir = os.path.join(game_dir, subdir_name)
-
-                    new_subdirectory_msgbox = QMessageBox()
-                    new_subdirectory_msgbox.setWindowTitle(_('Install directory is not empty'))
-                    new_subdirectory_msgbox.setText(_('You cannot install the game in a directory '
-                                                      'that is not empty. We can quickly proceed with a new subdirectory.'
-                                                      ))
-                    new_subdirectory_msgbox.setInformativeText(_('Can we create a new empty '
-                                                                 'subdirectory to proceed?'))
-                    new_subdirectory_msgbox.addButton(_('Create the {name} subdirectory and '
-                                                        'proceed').format(name=subdir_name),
-                                                      QMessageBox.YesRole)
-                    new_subdirectory_msgbox.addButton(_('I will choose or create a different '
-                                                        'directory'), QMessageBox.NoRole)
-                    new_subdirectory_msgbox.setIcon(QMessageBox.Question)
-
-                    if new_subdirectory_msgbox.exec() == 1:
-                        return
-
-                    os.makedirs(subdir)
-                    game_dir = subdir
-                    game_dir_group_box.set_dir_combo_value(subdir)
-
-            logger.info(
-                'Updating CDDA...\n'
-                'CDDAGL Directory: {}\n'
-                'CDDA Directory: {}'
-                    .format(get_cddagl_path(), game_dir)
-            )
-            self.updating = True
-            self.download_aborted = False
-            self.clearing_previous_dir = False
-            self.backing_up_game = False
-            self.extracting_new_build = False
-            self.analysing_new_build = False
-            self.in_post_extraction = False
-
-            self.selected_build = self.builds[self.builds_combo.currentIndex()]
-
-            selected_branch = self.branch_button_group.checkedButton()
-            experimental_selected = selected_branch is self.experimental_radio_button
-
-            latest_build = self.builds[0]
-            if experimental_selected and game_dir_group_box.current_build == latest_build['number']:
-                confirm_msgbox = QMessageBox()
-                confirm_msgbox.setWindowTitle(_('Game is up to date'))
-                confirm_msgbox.setText(_('You already have the latest version.'
-                                         ))
-                confirm_msgbox.setInformativeText(_('Are you sure you want to '
-                                                    'update your game?'))
-                confirm_msgbox.addButton(_('Update the game again'),
-                                         QMessageBox.YesRole)
-                confirm_msgbox.addButton(_('I do not need to update the '
-                                           'game again'), QMessageBox.NoRole)
-                confirm_msgbox.setIcon(QMessageBox.Question)
-
-                if confirm_msgbox.exec() == 1:
-                    self.updating = False
-                    return
-
-            game_dir_group_box.disable_controls()
-            self.disable_controls()
-
-            soundpacks_tab = main_tab.get_soundpacks_tab()
-            mods_tab = main_tab.get_mods_tab()
-            settings_tab = main_tab.get_settings_tab()
-            backups_tab = main_tab.get_backups_tab()
-
-            soundpacks_tab.disable_tab()
-            mods_tab.disable_tab()
-            settings_tab.disable_tab()
-            backups_tab.disable_tab()
-
-            try:
-                if not os.path.exists(game_dir):
-                    os.makedirs(game_dir)
-                elif os.path.isfile(game_dir):
-                    main_window = self.get_main_window()
-                    status_bar = main_window.statusBar()
-
-                    status_bar.showMessage(_('Cannot install game on a file'))
-
-                    self.finish_updating()
-                    return
-
-                download_dir = tempfile.mkdtemp(prefix=cons.TEMP_PREFIX)
-
-                download_url = self.selected_build['url']
-
-                url = QUrl(download_url)
-                file_info = QFileInfo(url.path())
-                file_name = file_info.fileName()
-
-                self.downloaded_file = os.path.join(download_dir, file_name)
-                self.downloading_file = open(self.downloaded_file, 'wb')
-
-                self.download_game_update(download_url)
-
-            except OSError as e:
-                main_window = self.get_main_window()
-                status_bar = main_window.statusBar()
-
-                self.finish_updating()
-
-                status_bar.showMessage(str(e))
-        else:
-            main_tab = self.get_main_tab()
-            game_dir_group_box = main_tab.game_dir_group_box
-
-            # Are we downloading the file?
-            if self.download_http_reply.isRunning():
-                self.download_aborted = True
-                self.download_http_reply.abort()
-
-                main_window = self.get_main_window()
-
-                status_bar = main_window.statusBar()
-
-                if game_dir_group_box.exe_path is not None:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Update cancelled'))
-                else:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Installation cancelled'))
-            elif self.clearing_previous_dir:
-                if self.progress_rmtree is not None:
-                    self.progress_rmtree.stop()
-            elif self.backing_up_game:
-                self.backup_timer.stop()
-
-                main_window = self.get_main_window()
-                status_bar = main_window.statusBar()
-
-                status_bar.removeWidget(self.backup_label)
-                status_bar.removeWidget(self.backup_progress_bar)
-
-                status_bar.busy -= 1
-
-                self.restore_backup()
-
-                if game_dir_group_box.exe_path is not None:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Update cancelled'))
-                else:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Installation cancelled'))
-
-            elif self.extracting_new_build:
-                self.extracting_timer.stop()
-
-                main_window = self.get_main_window()
-                status_bar = main_window.statusBar()
-
-                status_bar.removeWidget(self.extracting_label)
-                status_bar.removeWidget(self.extracting_progress_bar)
-
-                status_bar.busy -= 1
-
-                self.extracting_zipfile.close()
-
-                download_dir = os.path.dirname(self.downloaded_file)
-                delete_path(download_dir)
-
-                path = self.clean_game_dir()
-                self.restore_backup()
-                self.restore_previous_content(path)
-
-                if path is not None:
-                    delete_path(path)
-
-                if game_dir_group_box.exe_path is not None:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Update cancelled'))
-                else:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Installation cancelled'))
-            elif self.analysing_new_build:
-                game_dir_group_box.opened_exe.close()
-                game_dir_group_box.exe_reading_timer.stop()
-
-                main_window = self.get_main_window()
-                status_bar = main_window.statusBar()
-
-                status_bar.removeWidget(game_dir_group_box.reading_label)
-                status_bar.removeWidget(game_dir_group_box.reading_progress_bar)
-
-                status_bar.busy -= 1
-
-                path = self.clean_game_dir()
-                self.restore_backup()
-                self.restore_previous_content(path)
-
-                if path is not None:
-                    delete_path(path)
-
-                if game_dir_group_box.exe_path is not None:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Update cancelled'))
-                else:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Installation cancelled'))
-            elif self.in_post_extraction:
-                self.in_post_extraction = False
-
-                if self.progress_copy is not None:
-                    self.progress_copy.stop()
-
-                main_window = self.get_main_window()
-                status_bar = main_window.statusBar()
-                status_bar.clearMessage()
-
-                path = self.clean_game_dir()
-                self.restore_backup()
-                self.restore_previous_content(path)
-
-                if path is not None:
-                    delete_path(path)
-
-                if game_dir_group_box.exe_path is not None:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Update cancelled'))
-                else:
-                    if status_bar.busy == 0:
-                        status_bar.showMessage(_('Installation cancelled'))
-
-            self.finish_updating()
-
-    def clean_game_dir(self):
-        game_dir = self.game_dir
-        dir_list = os.listdir(game_dir)
-        if len(dir_list) == 0 or (
-                len(dir_list) == 1 and dir_list[0] == 'previous_version'):
-            return None
-
-        temp_move_dir = tempfile.mkdtemp(prefix=cons.TEMP_PREFIX)
-
-        excluded_entries = set(['previous_version'])
-        if config_true(get_config_value('prevent_save_move', 'False')):
-            excluded_entries.add('save')
-        # Prevent moving the launcher if it's in the game directory
-        if getattr(sys, 'frozen', False):
-            launcher_exe = os.path.abspath(sys.executable)
-            launcher_dir = os.path.dirname(launcher_exe)
-            if os.path.abspath(game_dir) == launcher_dir:
-                excluded_entries.add(os.path.basename(launcher_exe))
-        for entry in dir_list:
-            if entry not in excluded_entries:
-                entry_path = os.path.join(game_dir, entry)
-                shutil.move(entry_path, temp_move_dir)
-
-        return temp_move_dir
-
     def restore_previous_content(self, path):
         if path is None:
             return
@@ -3070,6 +3173,130 @@ class UpdateGroupBoxWin(UpdateGroupBox):
                 shutil.move(entry_path, game_dir)
 
             delete_path(previous_version_dir)
+
+    def extract_new_build(self):
+        self.extracting_new_build = True
+
+        z = zipfile.ZipFile(self.downloaded_file)
+        self.extracting_zipfile = z
+
+        self.extracting_infolist = z.infolist()
+        self.extracting_index = 0
+
+        main_window = self.get_main_window()
+        status_bar = main_window.statusBar()
+
+        status_bar.busy += 1
+
+        extracting_label = QLabel()
+        status_bar.addWidget(extracting_label, 100)
+        self.extracting_label = extracting_label
+
+        progress_bar = QProgressBar()
+        status_bar.addWidget(progress_bar)
+        self.extracting_progress_bar = progress_bar
+
+        timer = QTimer(self)
+        self.extracting_timer = timer
+
+        progress_bar.setRange(0, len(self.extracting_infolist))
+
+        def timeout():
+            self.extracting_progress_bar.setValue(self.extracting_index)
+
+            if self.extracting_index == len(self.extracting_infolist):
+                self.extracting_timer.stop()
+
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+
+                status_bar.removeWidget(self.extracting_label)
+                status_bar.removeWidget(self.extracting_progress_bar)
+
+                status_bar.busy -= 1
+
+                self.extracting_new_build = False
+
+                self.extracting_zipfile.close()
+
+                # Keep a copy of the archive if selected in the settings
+                if config_true(get_config_value('keep_archive_copy', 'False')):
+                    archive_dir = get_config_value('archive_directory', '')
+                    archive_name = os.path.basename(self.downloaded_file)
+                    move_target = os.path.join(archive_dir, archive_name)
+                    if (os.path.isdir(archive_dir)
+                        and not os.path.exists(move_target)):
+                        shutil.move(self.downloaded_file, archive_dir)
+
+                download_dir = os.path.dirname(self.downloaded_file)
+                delete_path(download_dir)
+
+                main_tab = self.get_main_tab()
+                game_dir_group_box = main_tab.game_dir_group_box
+
+                self.analysing_new_build = True
+                game_dir_group_box.analyse_new_build(self.selected_build)
+
+            else:
+                extracting_element = self.extracting_infolist[
+                    self.extracting_index]
+                self.extracting_label.setText(_('Extracting {0}').format(
+                    extracting_element.filename))
+
+                try:
+                    self.extracting_zipfile.extract(extracting_element,
+                        self.game_dir)
+                except OSError as e:
+                    # Display the error and stop the update process
+                    error_msgbox = QMessageBox()
+                    error_msgbox.setWindowTitle(
+                        _('Cannot extract game archive'))
+
+                    text = _('''
+<p>The launcher failed to extract the game archive.</p>
+<p>It received the following error from the operating system: {error}</p>'''
+                        ).format(error=html.escape(e.strerror))
+
+                    error_msgbox.setText(text)
+                    error_msgbox.addButton(_('OK'), QMessageBox.YesRole)
+                    error_msgbox.setIcon(QMessageBox.Critical)
+
+                    error_msgbox.exec()
+
+                    self.update_game()
+
+                self.extracting_index += 1
+
+        timer.timeout.connect(timeout)
+        timer.start(0)
+
+    def test_download_thread(self, downloaded_file):
+        class TestingWinZipThread(QThread):
+            completed = pyqtSignal()
+            invalid = pyqtSignal()
+            not_downloaded = pyqtSignal()
+
+            def __init__(self, downloaded_file):
+                super(TestingWinZipThread, self).__init__()
+
+                self.downloaded_file = downloaded_file
+
+            def __del__(self):
+                self.wait()
+
+            def run(self):
+                try:
+                    with zipfile.ZipFile(self.downloaded_file) as z:
+                        if z.testzip() is not None:
+                            self.invalid.emit()
+                            return
+                except zipfile.BadZipFile:
+                    self.not_downloaded.emit()
+                    return
+
+                self.completed.emit()
+
+        return TestingWinZipThread(downloaded_file)
 
 
 class ChangelogParsingThread(QThread):

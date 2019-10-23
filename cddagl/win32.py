@@ -788,11 +788,12 @@ def write_named_pipe(name, value):
         if fileh is not None:
             win32api.CloseHandle(fileh)
 
+
 def delete_path(path):
-    ''' Move directory or file in the recycle bin (or permanently delete it
+    """ Move directory or file in the recycle bin (or permanently delete it
     depending on the settings used) using the built in Windows File
     operations dialog
-    '''
+    """
 
     # Make sure we have an absolute path first
     if not os.path.isabs(path):
@@ -819,10 +820,11 @@ def delete_path(path):
     except com_error:
         return False
 
+
 def move_path(srcpath, dstpath):
-    ''' Move srcpath to dstpath using using the built in Windows File
+    """ Move srcpath to dstpath using using the built in Windows File
     operations dialog
-    '''
+    """
 
     # Make sure we have absolute paths first
     if not os.path.isabs(srcpath):
@@ -844,3 +846,7 @@ def move_path(srcpath, dstpath):
         return winutils.move(srcpath, dstpath, flags)
     except com_error:
         return False
+
+
+def get_save_directory(game_directory):
+    return os.path.join(game_directory, 'save')

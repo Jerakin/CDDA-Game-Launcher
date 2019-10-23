@@ -1,13 +1,24 @@
 import os
 import sys
 import tempfile
+import filecmp
+import shutil
 import locale
 import psutil
+import appdirs
+import logging
+from subprocess import Popen, PIPE, call
+import plistlib
+import tempfile
+import send2trash
 
 import posix_ipc
 from posix_ipc import *
 
+import cddagl.constants as cons
+
 CDDASystemError = OSError
+logger = logging.getLogger('cddagl')
 
 
 class PathNotFoundException(Exception):
@@ -81,8 +92,12 @@ class SingleInstance:
         return (self.lasterror == 666)
 
     def close(self):
+        # TODO: Investigate if this try statement is a bad idea
         if self.mutex:
-            self.mutex.unlink()
+            try:
+                self.mutex.unlink()
+            except posix_ipc.ExistentialError:
+                pass
             self.mutex = None
 
     def __del__(self):
@@ -128,8 +143,81 @@ def write_named_pipe(name, value):
 
 
 def delete_path(path):
-    raise NotImplementedError
+    try:
+        send2trash.send2trash(path)
+        return True
+    except send2trash.TrashPermissionError:
+        return False
 
 
 def move_path(srcpath, dstpath):
-    raise NotImplementedError
+    # TODO: Add progressbar
+    is_file = os.path.isfile(srcpath)
+    try:
+        if is_file:
+            shutil.copy2(srcpath, dstpath)
+            os.remove(srcpath)
+        else:
+            shutil.copytree(srcpath, os.path.join(dstpath, os.path.basename(srcpath)), True)
+        return True
+    except PermissionError as e:
+        if not is_file:
+            if filecmp.cmp(srcpath, os.path.join(dstpath, os.path.basename(srcpath))):
+                shutil.rmtree(srcpath)
+                return True
+        logger.info(e)
+        return False
+
+
+def get_save_directory(_):
+    return os.path.join(appdirs.AppDirs("Cataclysm").site_data_dir, "save")
+
+
+def mount(dmg_path, use_shadow=False):
+    """
+    Attempts to mount the dmg at dmgpath
+    and returns a list of mountpoints
+    If use_shadow is true, mount image with shadow file
+    """
+    mount_points = []
+    dmg_name = os.path.basename(dmg_path)
+    cmd = ['/usr/bin/hdiutil', 'attach', dmg_path, '-mountRandom', tempfile.mkdtemp(prefix=cons.TEMP_PREFIX), '-plist',
+           '-owners', 'on']
+
+    if use_shadow:
+        shadow_name = dmg_name + '.shadow'
+        shadow_root = os.path.dirname(dmg_path)
+        shadow_path = os.path.join(shadow_root, shadow_name)
+        cmd.extend(['-shadow', shadow_path])
+    else:
+        shadow_path = None
+    proc = Popen(cmd, bufsize=-1,
+        stdout=PIPE, stderr=PIPE)
+    (plist_str, err) = proc.communicate()
+
+    if proc.returncode:
+        logger.info("Error: {} while mounting {}".format(err, dmg_name))
+
+    if plist_str:
+        plist = plistlib.loads(plist_str)
+        for entity in plist['system-entities']:
+            if 'mount-point' in entity:
+                mount_points.append(entity['mount-point'])
+
+    return mount_points, shadow_path
+
+
+def unmount(mount_point):
+    """
+    Unmounts the dmg at mountpoint
+    """
+    proc = Popen(['/usr/bin/hdiutil', 'detach', mount_point], bufsize=-1, stdout=PIPE, stderr=PIPE)
+    (unused_output, err) = proc.communicate()
+    if proc.returncode:
+        logger.info("Polite unmount failed: {}".format(err))
+        logger.info('Attempting to force unmount {}'.format(mount_point))
+        # try forcing the unmount
+        retcode = call(['/usr/bin/hdiutil', 'detach', mount_point,
+                                '-force'])
+        if retcode:
+            logger.info('Failed to unmount {}'.format(mount_point))
