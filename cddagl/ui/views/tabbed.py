@@ -18,11 +18,10 @@ from PyQt5.QtWidgets import (
     QGridLayout, QMainWindow, QLabel, QLineEdit, QPushButton, QProgressBar,
     QAction, QDialog, QTabWidget, QCheckBox, QMessageBox, QMenu
 )
-from pywintypes import error as PyWinError
 
 import cddagl.constants as cons
 from cddagl import __version__ as version
-from cddagl.functions import sizeof_fmt, delete_path
+from cddagl.functions import sizeof_fmt
 from cddagl.i18n import proxy_gettext as _
 from cddagl.sql.functions import get_config_value, set_config_value, config_true
 from cddagl.ui.views.backups import BackupsTab
@@ -33,7 +32,7 @@ from cddagl.ui.views.mods import ModsTab
 from cddagl.ui.views.settings import SettingsTab
 from cddagl.ui.views.soundpacks import SoundpacksTab
 from cddagl.ui.views.tilesets import TilesetsTab
-from cddagl.win32 import SimpleNamedPipe
+from cddagl.system import SimpleNamedPipe, CDDASystemError, delete_path
 
 logger = logging.getLogger('cddagl')
 
@@ -311,7 +310,7 @@ class TabbedWindow(QMainWindow):
 
                 try:
                     self.pipe = SimpleNamedPipe('cddagl_instance')
-                except (OSError, PyWinError):
+                except (OSError, CDDASystemError):
                     self.pipe = None
 
             def __del__(self):
@@ -326,7 +325,7 @@ class TabbedWindow(QMainWindow):
                         try:
                             value = self.pipe.read(1024)
                             self.read.emit(value)
-                        except (PyWinError, IOError):
+                        except (CDDASystemError, IOError):
                             pass
 
         def instance_read(value):

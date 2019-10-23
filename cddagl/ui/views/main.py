@@ -28,13 +28,14 @@ from PyQt5.QtWidgets import (
     QComboBox, QTextBrowser, QMessageBox, QStyle, QHBoxLayout, QSizePolicy
 )
 from babel.dates import format_datetime
-from pywintypes import error as PyWinError
+
+from cddagl.system import CDDASystemError, move_path, delete_path
 
 import cddagl.constants as cons
 from cddagl.constants import get_cddagl_path, get_cdda_uld_path
 from cddagl import __version__ as version
 from cddagl.functions import (
-    tryint, move_path, is_64_windows, sizeof_fmt, delete_path,
+    tryint, is_64_windows, sizeof_fmt,
     clean_qt_path, unique, log_exception, ensure_slash
 )
 from cddagl.i18n import proxy_ngettext as ngettext, proxy_gettext as _
@@ -42,7 +43,7 @@ from cddagl.sql.functions import (
     get_config_value, set_config_value, new_version, get_build_from_sha256,
     new_build, config_true
 )
-from cddagl.win32 import (
+from cddagl.system import (
     find_process_with_file_handle, activate_window, process_id_from_path, wait_for_pid
 )
 

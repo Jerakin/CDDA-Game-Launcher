@@ -25,9 +25,10 @@ from rfc6266 import parse_headers as parse_cd_headers
 import cddagl.constants as cons
 from cddagl import __version__ as version
 from cddagl.constants import get_data_path, get_cddagl_path
-from cddagl.functions import sizeof_fmt, delete_path
+from cddagl.functions import sizeof_fmt
 from cddagl.i18n import proxy_gettext as _
 from cddagl.ui.views.dialogs import BrowserDownloadDialog
+from cddagl.system import delete_path
 
 logger = logging.getLogger('cddagl')
 

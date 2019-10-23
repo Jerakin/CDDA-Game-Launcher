@@ -4,12 +4,8 @@ import re
 import traceback
 from io import StringIO
 
-import winutils
-from pywintypes import com_error
-
 import cddagl
 from cddagl.i18n import proxy_gettext as _
-from cddagl.sql.functions import get_config_value, config_true
 
 version = cddagl.__version__
 logger = logging.getLogger('cddagl')
@@ -80,59 +76,4 @@ def sizeof_fmt(num, suffix=None):
         num /= 1024.0
     return "%.1f %s%s" % (num, _('Yi'), suffix)
 
-def delete_path(path):
-    ''' Move directory or file in the recycle bin (or permanently delete it
-    depending on the settings used) using the built in Windows File
-    operations dialog
-    '''
 
-    # Make sure we have an absolute path first
-    if not os.path.isabs(path):
-        path = os.path.abspath(path)
-
-    shellcon = winutils.shellcon
-
-    permanently_delete_files = config_true(
-        get_config_value('permanently_delete_files', 'False'))
-
-    if permanently_delete_files:
-        flags = 0
-    else:
-        flags = shellcon.FOF_ALLOWUNDO
-
-    flags = (flags |
-        shellcon.FOF_SILENT |
-        shellcon.FOF_NOCONFIRMATION |
-        shellcon.FOF_WANTNUKEWARNING
-        )
-
-    try:
-        return winutils.delete(path, flags)
-    except com_error:
-        return False
-
-def move_path(srcpath, dstpath):
-    ''' Move srcpath to dstpath using using the built in Windows File
-    operations dialog
-    '''
-
-    # Make sure we have absolute paths first
-    if not os.path.isabs(srcpath):
-        srcpath = os.path.abspath(srcpath)
-    if not os.path.isabs(dstpath):
-        dstpath = os.path.abspath(dstpath)
-
-    shellcon = winutils.shellcon
-
-    flags = (
-        shellcon.FOF_ALLOWUNDO |
-        shellcon.FOF_SILENT |
-        shellcon.FOF_NOCONFIRMMKDIR |
-        shellcon.FOF_NOCONFIRMATION |
-        shellcon.FOF_WANTNUKEWARNING
-        )
-
-    try:
-        return winutils.move(srcpath, dstpath, flags)
-    except com_error:
-        return False
