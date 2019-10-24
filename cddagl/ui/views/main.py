@@ -430,9 +430,6 @@ antivirus whitelist or select the action to trust this binary when detected.</p>
     def update_version(self):
         raise NotImplementedError
 
-    def test_download_thread(self):
-        raise NotImplementedError
-
     def check_running_process(self, exe_path):
         # TODO: Verify that this works on OSX
         pid = process_id_from_path(exe_path)
@@ -1808,14 +1805,27 @@ class UpdateGroupBox(QGroupBox):
         for entry in dir_list:
             if entry not in excluded_entries:
                 entry_path = os.path.join(game_dir, entry)
-                shutil.move(entry_path, temp_move_dir)
+                try:
+                    shutil.move(entry_path, temp_move_dir)
+                except PermissionError:
+                    logger.info("Moved but got permission error")
 
         return temp_move_dir
 
     def restore_previous_content(self, path):
-        raise NotImplementedError
+        if path is None:
+            return
 
-    def restore_backup(self):
+        game_dir = self.game_dir
+        previous_version_dir = os.path.join(game_dir, 'previous_version')
+        if not os.path.exists(previous_version_dir):
+            os.makedirs(previous_version_dir)
+
+        for entry in os.listdir(path):
+            entry_path = os.path.join(path, entry)
+            shutil.move(entry_path, previous_version_dir)
+
+    def test_download_thread(self):
         raise NotImplementedError
 
     def get_main_tab(self):
@@ -2141,6 +2151,9 @@ class UpdateGroupBox(QGroupBox):
             self.extract_new_build()
 
     def extract_new_build(self):
+        raise NotImplementedError
+
+    def restore_backup(self):
         raise NotImplementedError
 
     def asset_name(self, path, filename):
@@ -3050,44 +3063,39 @@ class UpdateGroupBoxOSX(UpdateGroupBox):
     def disable_radio_buttons(self):
         self.osx_radio_button.setEnabled(False)
 
-    def restore_previous_content(self, path):
-        raise NotImplementedError
-
-    def restore_backup(self):
-        raise NotImplementedError
-
     def extract_new_build(self):
         from cddagl.system import mount, unmount
 
+        def show_message(path, files):
+            if self.extracting_label:
+                self.extracting_label.setText(_('Extracting {0}'.format(path)))
 
         main_window = self.get_main_window()
         status_bar = main_window.statusBar()
-        extracting_label = QLabel()
-        status_bar.addWidget(extracting_label, 100)
-        self.extracting_label = extracting_label
+        self.extracting_label = QLabel()
+        status_bar.addWidget(self.extracting_label, 100)
 
         self.extracting_new_build = True
 
-        # These needs to be here to mirror the Win implementation
+        # These needs to be here to shadow the Win implementation
         # TODO: Remove the need for them
         self.extracting_zipfile = tempfile.TemporaryFile()
         timer = QTimer(self)
         self.extracting_timer = timer
 
-        progress_bar = QProgressBar()
-        status_bar.addWidget(progress_bar)
-        self.extracting_progress_bar = progress_bar
+        self.extracting_progress_bar = QProgressBar()
+        status_bar.addWidget(self.extracting_progress_bar)
+
         # End of mirror
 
-        mount_point, _ = mount(self.downloaded_file)
+        mount_point, status = mount(self.downloaded_file)
         if mount_point:
             mount_point = mount_point[0]
         else:
             logger.info("Could not mount DMG")
 
         shutil.copytree(os.path.join(mount_point, self.base_asset['Name'] + ".app"),
-                        os.path.join(self.game_dir, "Cataclysm.app"), True,
-                        ignore=lambda path, files: self.extracting_label.setText(_('Extracting {0}').format(path)))
+                        os.path.join(self.game_dir, "Cataclysm.app"), True, show_message)
 
         unmount(mount_point)
         self.extracting_timer.stop()
@@ -3115,6 +3123,24 @@ class UpdateGroupBoxOSX(UpdateGroupBox):
                 self.completed.emit()
 
         return TestingWinZipThread(downloaded_file)
+
+    def restore_backup(self):
+        game_dir = self.game_dir
+        previous_version_dir = os.path.join(game_dir, 'previous_version')
+
+        if os.path.isdir(previous_version_dir) and os.path.isdir(game_dir):
+
+            for entry in os.listdir(previous_version_dir):
+                if entry == 'save' and config_true(get_config_value('prevent_save_move', 'False')):
+                    # TODO: Saves does not live in this directory in OSX
+                    continue
+                if entry == "Cataclysm.app":
+                    # TODO: Should we move the app?
+                    continue
+                entry_path = os.path.join(previous_version_dir, entry)
+                shutil.move(entry_path, game_dir)
+
+            delete_path(previous_version_dir)
 
 
 class UpdateGroupBoxWin(UpdateGroupBox):
@@ -3144,35 +3170,6 @@ class UpdateGroupBoxWin(UpdateGroupBox):
     def disable_radio_buttons(self):
         self.x86_radio_button.setEnabled(False)
         self.x64_radio_button.setEnabled(False)
-
-    def restore_previous_content(self, path):
-        if path is None:
-            return
-
-        game_dir = self.game_dir
-        previous_version_dir = os.path.join(game_dir, 'previous_version')
-        if not os.path.exists(previous_version_dir):
-            os.makedirs(previous_version_dir)
-
-        for entry in os.listdir(path):
-            entry_path = os.path.join(path, entry)
-            shutil.move(entry_path, previous_version_dir)
-
-    def restore_backup(self):
-        game_dir = self.game_dir
-        previous_version_dir = os.path.join(game_dir, 'previous_version')
-
-        if os.path.isdir(previous_version_dir) and os.path.isdir(game_dir):
-
-            for entry in os.listdir(previous_version_dir):
-                if (entry == 'save' and
-                        config_true(get_config_value('prevent_save_move',
-                                                     'False'))):
-                    continue
-                entry_path = os.path.join(previous_version_dir, entry)
-                shutil.move(entry_path, game_dir)
-
-            delete_path(previous_version_dir)
 
     def extract_new_build(self):
         self.extracting_new_build = True
@@ -3297,6 +3294,22 @@ class UpdateGroupBoxWin(UpdateGroupBox):
                 self.completed.emit()
 
         return TestingWinZipThread(downloaded_file)
+
+    def restore_backup(self):
+        game_dir = self.game_dir
+        previous_version_dir = os.path.join(game_dir, 'previous_version')
+
+        if os.path.isdir(previous_version_dir) and os.path.isdir(game_dir):
+
+            for entry in os.listdir(previous_version_dir):
+                if (entry == 'save' and
+                        config_true(get_config_value('prevent_save_move',
+                                                     'False'))):
+                    continue
+                entry_path = os.path.join(previous_version_dir, entry)
+                shutil.move(entry_path, game_dir)
+
+            delete_path(previous_version_dir)
 
 
 class ChangelogParsingThread(QThread):
