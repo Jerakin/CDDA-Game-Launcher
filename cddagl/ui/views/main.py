@@ -8,6 +8,8 @@ from cddagl.ui.views.update_group_box import UpdateGroupBoxWin, UpdateGroupBoxOS
 
 logger = logging.getLogger('cddagl')
 
+# TODO: Download the correct build
+
 
 class MainTab(QWidget):
     def __init__(self):

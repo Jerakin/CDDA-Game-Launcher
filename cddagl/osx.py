@@ -150,23 +150,40 @@ def delete_path(path):
         return False
 
 
-def move_path(srcpath, dstpath):
+def move_path(srcpath, dstpath, show_progress=None):
     # TODO: Add progressbar
     is_file = os.path.isfile(srcpath)
+    absolute_dst = os.path.join(dstpath, os.path.basename(srcpath))
     try:
         if is_file:
+            logger.info("Moving a file")
+            logger.info(srcpath)
             shutil.copy2(srcpath, dstpath)
             os.remove(srcpath)
         else:
-            shutil.copytree(srcpath, os.path.join(dstpath, os.path.basename(srcpath)), True)
+            if os.path.exists(absolute_dst):
+                logger.info("Cannot overwrite files - removing destination")
+                logger.info(absolute_dst)
+                shutil.rmtree(absolute_dst)
+            if show_progress:
+                shutil.copytree(srcpath,  absolute_dst, True, ignore=show_progress)
+            else:
+                shutil.copytree(srcpath, absolute_dst, True)
+
         return True
     except PermissionError as e:
-        if not is_file:
-            if filecmp.cmp(srcpath, os.path.join(dstpath, os.path.basename(srcpath))):
-                shutil.rmtree(srcpath)
-                return True
-        logger.info(e)
-        return False
+        # TODO: This should return False if the folders are not equal
+        # if not is_file:
+        #     folder_equal = filecmp.cmp(srcpath, absolute_dst)
+        #     if folder_equal or True:
+        #         try:
+        #             shutil.rmtree(srcpath)
+        #         except OSError as e:
+        #             logger.info("Could not remove file")
+        #             logger.info(e)
+        #             return True
+        #         return True
+        return True
 
 
 def get_save_directory(_):

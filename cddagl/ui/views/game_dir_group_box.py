@@ -908,7 +908,137 @@ class GameDirGroupBoxOSX(GameDirGroupBox):
         timer.start(0)
 
     def analyse_new_build(self, build):
-        raise NotImplementedError
+        game_dir = self.dir_combo.currentText()
+
+        self.previous_exe_path = self.exe_path
+        self.exe_path = None
+
+        self.find_executable(game_dir)
+
+        if self.version_type is None:
+            self.version_value_label.setText(_('Not a CDDA directory'))
+            self.build_value_label.setText(_('Unknown'))
+            self.current_build = None
+
+            main_tab = self.get_main_tab()
+            update_group_box = main_tab.update_group_box
+            update_group_box.finish_updating()
+
+            self.launch_game_button.setEnabled(False)
+
+            main_window = self.get_main_window()
+            status_bar = main_window.statusBar()
+            status_bar.showMessage(_('No executable found in the downloaded '
+                                     'archive. You might want to restore your previous version.'))
+
+        else:
+            if (self.exe_reading_timer is not None
+                    and self.exe_reading_timer.isActive()):
+                self.exe_reading_timer.stop()
+
+                main_window = self.get_main_window()
+                status_bar = main_window.statusBar()
+                status_bar.removeWidget(self.reading_label)
+                status_bar.removeWidget(self.reading_progress_bar)
+
+                status_bar.busy -= 1
+
+            self.build_number = build['number']
+            self.build_date = build['date']
+
+            main_window = self.get_main_window()
+
+            status_bar = main_window.statusBar()
+            status_bar.clearMessage()
+
+            status_bar.busy += 1
+
+            reading_label = QLabel()
+            reading_label.setText(_('Reading: {0}').format(self.exe_path))
+            status_bar.addWidget(reading_label, 100)
+            self.reading_label = reading_label
+
+            progress_bar = QProgressBar()
+            status_bar.addWidget(progress_bar)
+            self.reading_progress_bar = progress_bar
+
+            timer = QTimer(self)
+            self.exe_reading_timer = timer
+
+            exe_size = os.path.getsize(self.exe_path)
+
+            progress_bar.setRange(0, exe_size)
+            self.exe_total_read = 0
+
+            self.exe_sha256 = hashlib.sha256()
+            self.last_bytes = None
+            self.game_version = ''
+            self.opened_exe = open(self.exe_path, 'rb')
+
+            def timeout():
+                bytes = self.opened_exe.read(cons.READ_BUFFER_SIZE)
+                if len(bytes) == 0:
+                    self.opened_exe.close()
+                    self.exe_reading_timer.stop()
+                    main_window = self.get_main_window()
+                    status_bar = main_window.statusBar()
+
+                    build_date = arrow.get(self.build_date, 'UTC')
+                    human_delta = build_date.humanize(arrow.utcnow(), locale=self.app_locale)
+                    self.build_value_label.setText(
+                        '{build} ({time_delta})'
+                            .format(build=self.build_number, time_delta=human_delta)
+                    )
+                    self.current_build = self.build_number
+
+                    status_bar.removeWidget(self.reading_label)
+                    status_bar.removeWidget(self.reading_progress_bar)
+
+                    status_bar.busy -= 1
+
+                    sha256 = self.exe_sha256.hexdigest()
+
+                    stable_version = cons.STABLE_SHA256.get(sha256, None)
+                    is_stable = stable_version is not None
+
+                    if is_stable:
+                        self.game_version = stable_version
+
+                    if self.game_version == '':
+                        self.game_version = _('Unknown')
+                    self.version_value_label.setText(
+                        '{version} ({type})'
+                            .format(version=self.game_version, type=self.version_type)
+                    )
+
+                    new_build(self.game_version, sha256, is_stable, self.build_number,
+                              self.build_date)
+
+                    main_tab = self.get_main_tab()
+                    update_group_box = main_tab.update_group_box
+
+                    update_group_box.post_extraction()
+
+                else:
+                    last_frame = bytes
+                    if self.last_bytes is not None:
+                        last_frame = self.last_bytes + last_frame
+
+                    match = re.search(
+                        b'(?P<version>[01]\\.[A-F](-\\d+-g[0-9a-f]+)?)\\x00',
+                        last_frame)
+                    if match is not None:
+                        game_version = match.group('version').decode('ascii')
+                        if len(game_version) > len(self.game_version):
+                            self.game_version = game_version
+
+                    self.exe_total_read += len(bytes)
+                    self.reading_progress_bar.setValue(self.exe_total_read)
+                    self.exe_sha256.update(bytes)
+                    self.last_bytes = bytes
+
+            timer.timeout.connect(timeout)
+            timer.start(0)
 
 
 class GameDirGroupBoxWin(GameDirGroupBox):

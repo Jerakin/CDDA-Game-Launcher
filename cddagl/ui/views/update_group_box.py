@@ -463,10 +463,8 @@ class UpdateGroupBox(QGroupBox):
         for entry in dir_list:
             if entry not in excluded_entries:
                 entry_path = os.path.join(game_dir, entry)
-                try:
-                    shutil.move(entry_path, temp_move_dir)
-                except PermissionError:
-                    logger.info("Moved but got permission error")
+                # TODO: Verify that it is no issue using move_path on windows for temp files
+                move_path(entry_path, temp_move_dir)
 
         return temp_move_dir
 
@@ -481,7 +479,8 @@ class UpdateGroupBox(QGroupBox):
 
         for entry in os.listdir(path):
             entry_path = os.path.join(path, entry)
-            shutil.move(entry_path, previous_version_dir)
+            # TODO: Investigate if using move_path here instead of shutil gives problem on Windows
+            move_path(entry_path, previous_version_dir)
 
     def test_download_thread(self):
         raise NotImplementedError
@@ -670,6 +669,7 @@ class UpdateGroupBox(QGroupBox):
             self.test_thread = test_thread
 
     def clear_previous_dir(self):
+        logger.info("Clearing 'previous' Directory")
         self.clearing_previous_dir = True
 
         main_tab = self.get_main_tab()
@@ -696,6 +696,7 @@ class UpdateGroupBox(QGroupBox):
             self.backup_current_game()
 
     def backup_current_game(self):
+        logger.info("Backing up current game...")
         self.clearing_previous_dir = False
         self.progress_rmtree = None
 
@@ -777,7 +778,9 @@ class UpdateGroupBox(QGroupBox):
                         self.backup_current_display = False
                     else:
                         srcpath = os.path.join(self.game_dir, backup_element)
+                        print(srcpath, self.backup_dir)
                         if not move_path(srcpath, self.backup_dir):
+                            print("We could not move the path")
                             self.backup_timer.stop()
 
                             main_window = self.get_main_window()
@@ -805,6 +808,7 @@ class UpdateGroupBox(QGroupBox):
             timer.timeout.connect(timeout)
             timer.start(0)
         else:
+            print("Skipped backing up current game")
             self.backing_up_game = False
             self.extract_new_build()
 
@@ -1723,7 +1727,7 @@ class UpdateGroupBoxOSX(UpdateGroupBox):
 
     def extract_new_build(self):
         from cddagl.system import mount, unmount
-
+        logger.info("Extracting...")
         def show_message(path, files):
             if self.extracting_label:
                 self.extracting_label.setText(_('Extracting {0}'.format(path)))
@@ -1752,12 +1756,27 @@ class UpdateGroupBoxOSX(UpdateGroupBox):
         else:
             logger.info("Could not mount DMG")
 
-        shutil.copytree(os.path.join(mount_point, self.base_asset['Name'] + ".app"),
-                        os.path.join(self.game_dir, "Cataclysm.app"), True, show_message)
+        move_path(
+            os.path.join(mount_point, self.base_asset['Name'] + ".app"), self.game_dir,
+            show_message)
 
         unmount(mount_point)
         self.extracting_timer.stop()
         status_bar.removeWidget(self.extracting_label)
+
+        self.extracting_new_build = False
+
+        # TODO: Keep a copy of the archive if selected in the settings
+        # TODO: Keep a copy of the archive if selected in the settings
+
+        download_dir = os.path.dirname(self.downloaded_file)
+        delete_path(download_dir)
+
+        main_tab = self.get_main_tab()
+        game_dir_group_box = main_tab.game_dir_group_box
+
+        self.analysing_new_build = True
+        game_dir_group_box.analyse_new_build(self.selected_build)
 
     def test_download_thread(self, downloaded_file):
         class TestingWinZipThread(QThread):
@@ -1830,6 +1849,7 @@ class UpdateGroupBoxWin(UpdateGroupBox):
         self.x64_radio_button.setEnabled(False)
 
     def extract_new_build(self):
+        logger.info("Extracting...")
         self.extracting_new_build = True
 
         z = zipfile.ZipFile(self.downloaded_file)
